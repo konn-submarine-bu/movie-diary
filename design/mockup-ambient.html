@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="midnight">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>电影日记 · 氛围版设计稿</title>
+<style>
+  @property --bg { syntax: '<color>'; inherits: true; initial-value: #101116; }
+  @property --text { syntax: '<color>'; inherits: true; initial-value: #ece9e2; }
+  @property --muted { syntax: '<color>'; inherits: true; initial-value: #8d909b; }
+  @property --accent { syntax: '<color>'; inherits: true; initial-value: #e0a458; }
+  @property --accent-text { syntax: '<color>'; inherits: true; initial-value: #e0a458; }
+  @property --glow1 { syntax: '<color>'; inherits: true; initial-value: rgba(224,164,88,.2); }
+  @property --glow2 { syntax: '<color>'; inherits: true; initial-value: rgba(120,90,200,.14); }
+  @property --vig { syntax: '<color>'; inherits: true; initial-value: rgba(0,0,0,.5); }
+  @property --mh { syntax: '<number>'; inherits: true; initial-value: 30; }
+
+  :root, html[data-theme=midnight] { --bg:#101116; --text:#ece9e2; --muted:#8d909b; --accent:#e0a458; --accent-text:#e0a458; --glow1:rgba(224,164,88,.20); --glow2:rgba(120,90,200,.14); --vig:rgba(0,0,0,.5); }
+  html[data-theme=fog]   { --bg:#0b1214; --text:#e3ecec; --muted:#86989b; --accent:#5cc4c0; --accent-text:#5cc4c0; --glow1:rgba(92,196,192,.18); --glow2:rgba(60,90,130,.22); --vig:rgba(0,0,0,.55); }
+  html[data-theme=neon]  { --bg:#090919; --text:#e8e8ff; --muted:#8f90bf; --accent:#8b7bff; --accent-text:#a99dff; --glow1:rgba(139,123,255,.30); --glow2:rgba(46,230,214,.16); --vig:rgba(0,0,10,.55); }
+  html[data-theme=blood] { --bg:#110707; --text:#eddcd8; --muted:#a08581; --accent:#e0454b; --accent-text:#f06a6f; --glow1:rgba(224,69,75,.22); --glow2:rgba(110,0,0,.34); --vig:rgba(0,0,0,.6); }
+  html[data-theme=olive] { --bg:#11140d; --text:#e6e8d8; --muted:#929780; --accent:#b4c46a; --accent-text:#b4c46a; --glow1:rgba(180,196,106,.16); --glow2:rgba(150,100,50,.18); --vig:rgba(0,0,0,.5); }
+  html[data-theme=rose]  { --bg:#f7ece8; --text:#3a2429; --muted:#86666c; --accent:#c9506a; --accent-text:#a8344e; --glow1:rgba(226,120,140,.34); --glow2:rgba(255,190,150,.40); --vig:rgba(120,60,50,.12); }
+  html[data-theme=cream] { --bg:#fbf1d9; --text:#33291a; --muted:#7c7152; --accent:#ee6c3a; --accent-text:#c2491a; --glow1:rgba(255,170,60,.36); --glow2:rgba(110,200,180,.30); --vig:rgba(140,100,30,.12); }
+  html[data-theme=sage]  { --bg:#e9f0e5; --text:#22322a; --muted:#5f7266; --accent:#3d8c68; --accent-text:#2d7352; --glow1:rgba(110,190,150,.36); --glow2:rgba(200,230,170,.46); --vig:rgba(50,90,70,.12); }
+
+  html { background: var(--bg); color: var(--text); transition: --bg 1s, --text 1s, --muted 1s, --accent 1s, --accent-text 1s, --glow1 1s, --glow2 1s, --vig 1s, --mh 1.4s; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; font-family: -apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; overflow-x: hidden; }
+  :root { --serif: "Songti SC","Noto Serif SC","STSong","Source Han Serif SC",serif; }
+  button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; padding: 0; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* ---- atmosphere layers ---- */
+  .layer { position: fixed; inset: 0; pointer-events: none; }
+  .aurora { z-index: 0; overflow: hidden; }
+  .aurora i { position: absolute; width: 62vmax; height: 62vmax; border-radius: 50%; filter: blur(40px); will-change: transform; }
+  .aurora i:nth-child(1) { left: -12vmax; top: -18vmax; background: radial-gradient(circle, var(--glow1), transparent 66%); animation: drift1 26s ease-in-out infinite alternate; }
+  .aurora i:nth-child(2) { right: -18vmax; bottom: -22vmax; background: radial-gradient(circle, var(--glow2), transparent 66%); animation: drift2 32s ease-in-out infinite alternate; }
+  .aurora i:nth-child(3) { left: 32%; top: 28%; width: 44vmax; height: 44vmax; background: radial-gradient(circle, hsl(var(--mh) 70% 52% / .20), transparent 66%); animation: drift3 38s ease-in-out infinite alternate; }
+  @keyframes drift1 { to { transform: translate(14vmax, 10vmax) scale(1.15); } }
+  @keyframes drift2 { to { transform: translate(-12vmax, -9vmax) scale(1.2); } }
+  @keyframes drift3 { to { transform: translate(-10vmax, 8vmax) scale(.85); } }
+  #fx { z-index: 1; width: 100%; height: 100%; }
+  .vignette { z-index: 2; background: radial-gradient(ellipse at 50% 42%, transparent 46%, var(--vig) 100%); }
+  .light { z-index: 3; left: 0; top: 0; width: 560px; height: 560px; margin: -280px 0 0 -280px; inset: auto; border-radius: 50%;
+    background: radial-gradient(circle, var(--glow1), transparent 66%); mix-blend-mode: screen; opacity: .85; }
+  html.is-light .light { mix-blend-mode: multiply; opacity: .5; }
+  .grain { z-index: 4; opacity: .06; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+
+  /* ---- stage ---- */
+  .stage { position: relative; z-index: 5; min-height: 100vh; padding: 0 clamp(22px, 4.4vw, 64px) 56px; display: flex; flex-direction: column; }
+  .top { display: flex; align-items: center; gap: 30px; padding: 28px 0 8px; }
+  .brand { font-family: var(--serif); letter-spacing: .5em; font-size: 15px; display: flex; align-items: center; gap: 12px; }
+  .brand i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 16px 2px var(--accent); animation: pulse 3.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35; transform: scale(.7); } }
+  .tabs button { color: var(--muted); font-size: 14px; margin-right: 22px; letter-spacing: .12em; transition: color .4s, text-shadow .4s; }
+  .tabs button:hover { color: var(--text); }
+  .tabs button[aria-selected=true] { color: var(--accent-text); text-shadow: 0 0 18px var(--accent); }
+  .search { margin-left: auto; width: min(300px, 34vw); }
+  .search input { width: 100%; background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--muted) 35%, transparent); color: var(--text); font: inherit; font-size: 14px; padding: 6px 2px; transition: border-color .4s; }
+  .search input::placeholder { color: var(--muted); }
+  .search input:focus { border-color: var(--accent); outline: none; }
+  .sw { display: flex; align-items: center; gap: 10px; }
+  .sw .auto { font-size: 12px; color: var(--muted); letter-spacing: .15em; margin-right: 4px; }
+  .sw .auto[aria-pressed=true] { color: var(--accent-text); }
+  .sw .dot { width: 14px; height: 14px; border-radius: 50%; transition: transform .35s, box-shadow .35s; opacity: .8; }
+  .sw .dot:hover { transform: scale(1.35); opacity: 1; }
+  .sw .dot[aria-pressed=true] { transform: scale(1.45); opacity: 1; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 18px var(--accent); }
+
+  .main { flex: 1; display: grid; grid-template-columns: minmax(330px, 470px) 1fr; gap: clamp(36px, 7vw, 120px); align-items: start; padding-top: 18px; }
+  body[data-view=list] .main { display: none; }
+  .wall { display: none; }
+  body[data-view=list] .wall { display: grid; }
+
+  /* ---- calendar ---- */
+  .mhead { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+  .mnum { margin: 0; font-family: var(--serif); font-weight: 200; font-size: clamp(84px, 10vw, 138px); line-height: .86; letter-spacing: -.02em;
+    background: linear-gradient(180deg, var(--accent-text) 0%, color-mix(in srgb, var(--accent-text) 10%, transparent) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .mnum small { font-size: .26em; font-weight: 400; margin-left: .15em; letter-spacing: .1em; }
+  .msub { font-size: 13px; letter-spacing: .3em; color: var(--muted); margin: 10px 0 0 4px; }
+  .arrows { display: flex; gap: 6px; padding-bottom: 8px; }
+  .arrows button { font-size: 28px; line-height: 1; width: 40px; height: 40px; border-radius: 50%; color: var(--muted); transition: color .3s, background .3s, transform .3s; }
+  .arrows button:hover:not(:disabled) { color: var(--accent-text); background: color-mix(in srgb, var(--accent) 12%, transparent); transform: scale(1.08); }
+  .arrows button:disabled { opacity: .2; cursor: default; }
+  .stats { margin: 22px 4px 0; font-size: 15px; letter-spacing: .06em; color: var(--muted); min-height: 24px; }
+  .stats b { color: var(--text); font-family: var(--serif); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stats i { font-style: normal; margin: 0 10px; opacity: .5; }
+  .why { margin: 8px 4px 22px; font-size: 12px; line-height: 1.7; color: var(--muted); font-style: italic; opacity: .85; }
+  .why b { font-style: normal; color: var(--accent-text); font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 4px; }
+  .dow { text-align: center; font-size: 11px; letter-spacing: .2em; color: var(--muted); opacity: .7; padding-bottom: 10px; }
+  .day { position: relative; aspect-ratio: 1; display: grid; place-items: center; font-size: 13px; color: var(--muted); animation: rise .7s cubic-bezier(.2,.7,.2,1) backwards; animation-delay: calc(var(--i) * 22ms); transition: color .3s; }
+  .day.blank { pointer-events: none; animation: none; }
+  .day:hover:not(.has) { color: var(--text); }
+  .day .n { position: relative; z-index: 2; font-variant-numeric: tabular-nums; transition: transform .4s; }
+  .day.today::before { content: ""; position: absolute; bottom: 12%; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .day.sel:not(.has) .n { color: var(--accent-text); font-weight: 700; transform: scale(1.25); text-shadow: 0 0 14px var(--accent); }
+  .orb { position: absolute; inset: 9%; border-radius: 50%; --h: 30; background: linear-gradient(160deg, hsl(var(--h) 58% 50%), hsl(calc(var(--h) + 50) 62% 20%));
+    box-shadow: 0 0 22px hsl(var(--h) 80% 55% / .42); animation: breathe 5.5s ease-in-out infinite; animation-delay: calc(var(--i) * -.41s); transition: transform .5s cubic-bezier(.2,.7,.2,1); }
+  .orb.b { inset: auto 2% 2% auto; width: 38%; height: 38%; animation-duration: 7s; }
+  @keyframes breathe { 50% { filter: brightness(1.18); box-shadow: 0 0 38px hsl(var(--h) 85% 58% / .62); } }
+  .has .n { color: #fff; font-weight: 600; text-shadow: 0 1px 8px rgba(0,0,0,.65); }
+  .has:hover .orb, .has:focus-visible .orb { transform: scale(1.14); }
+  .has.sel .orb { transform: scale(1.2); }
+  .has.sel::after { content: ""; position: absolute; inset: 2%; border-radius: 50%; border: 1px solid var(--accent-text); animation: ring 2.6s ease-out infinite; }
+  @keyframes ring { from { transform: scale(.92); opacity: .9; } to { transform: scale(1.5); opacity: 0; } }
+  .tip { position: absolute; bottom: 100%; left: 50%; transform: translate(-50%, 6px); white-space: nowrap; font-size: 12px; color: var(--text); letter-spacing: .08em; opacity: 0; pointer-events: none; transition: opacity .3s, transform .3s; z-index: 6; text-shadow: 0 0 12px var(--bg), 0 0 4px var(--bg); }
+  .day:hover .tip, .day:focus-visible .tip { opacity: 1; transform: translate(-50%, 0); }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); filter: blur(6px); } }
+
+  /* ---- hero ---- */
+  .right { display: flex; flex-direction: column; min-width: 0; }
+  .hero { --rx: 0deg; --ry: 0deg; --gx: 50%; display: grid; grid-template-columns: minmax(130px, 210px) 1fr; gap: clamp(24px, 3.4vw, 54px); align-items: center; min-height: 52vh; }
+  .cover { --h: 30; aspect-ratio: 2 / 3; border-radius: 6px; position: relative; display: flex; align-items: flex-end; padding: 14px; font-family: var(--serif); font-weight: 700; font-size: 17px; line-height: 1.25; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.6);
+    background: linear-gradient(160deg, hsl(var(--h) 58% 50%), hsl(calc(var(--h) + 50) 62% 18%)); transform: perspective(900px) rotateX(var(--rx)) rotateY(var(--ry));
+    box-shadow: 0 40px 90px -26px hsl(var(--h) 85% 50% / .65), 0 0 60px hsl(var(--h) 85% 50% / .22); animation: coverIn 1s cubic-bezier(.2,.7,.2,1) backwards; }
+  .cover::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(115deg, transparent 32%, rgba(255,255,255,.26) 48%, transparent 64%); background-size: 260% 100%; background-position: var(--gx) 0; mix-blend-mode: soft-light; }
+  @keyframes coverIn { from { opacity: 0; transform: perspective(900px) translateY(28px) rotateY(-22deg) scale(.92); } }
+  .txt > * { animation: rise .8s cubic-bezier(.2,.7,.2,1) backwards; }
+  .txt > :nth-child(1) { animation-delay: .05s; } .txt > :nth-child(3) { animation-delay: .35s; } .txt > :nth-child(4) { animation-delay: .5s; }
+  .txt > :nth-child(5) { animation-delay: .65s; } .txt > :nth-child(6) { animation-delay: .8s; } .txt > :nth-child(7) { animation-delay: .95s; }
+  .eyebrow { margin: 0 0 14px; font-size: 12px; letter-spacing: .38em; color: var(--muted); }
+  .title { margin: 0; font-family: var(--serif); font-weight: 700; font-size: clamp(36px, 4.8vw, 68px); line-height: 1.1; letter-spacing: .02em; text-shadow: 0 0 40px color-mix(in srgb, var(--accent) 40%, transparent); }
+  .title span { display: inline-block; animation: glyph .9s cubic-bezier(.2,.7,.2,1) backwards; animation-delay: calc(var(--c) * 55ms + 100ms); }
+  .title.faint { color: var(--muted); font-weight: 400; text-shadow: none; }
+  @keyframes glyph { from { opacity: 0; filter: blur(12px); transform: translateY(.4em); } }
+  .sub { margin: 16px 0 0; font-size: 14px; letter-spacing: .12em; color: var(--muted); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
+  .stars { color: var(--accent-text); letter-spacing: .25em; text-shadow: 0 0 14px var(--accent); }
+  .note { position: relative; margin: 30px 0 0; padding: 0 0 0 4px; max-width: 29em; font-family: var(--serif); font-size: clamp(18px, 1.9vw, 26px); line-height: 1.75; min-height: 3.5em; }
+  .note::before { content: "\201C"; position: absolute; left: -.55em; top: -.5em; font-size: 3.2em; color: var(--accent); opacity: .3; line-height: 1; }
+  .ty.typing::after { content: ""; display: inline-block; width: 2px; height: 1.05em; margin-left: 3px; vertical-align: -.15em; background: var(--accent-text); animation: blink .8s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .tags { margin: 22px 0 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); letter-spacing: .08em; }
+  .tags span::before { content: "#"; color: var(--accent-text); opacity: .7; margin-right: 2px; }
+  .picker { margin: 26px 0 0; display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 14px; }
+  .picker button { color: var(--muted); opacity: .6; transition: opacity .3s, color .3s; letter-spacing: .06em; }
+  .picker button:hover { opacity: 1; }
+  .picker button[aria-selected=true] { color: var(--accent-text); opacity: 1; text-shadow: 0 0 16px var(--accent); }
+  .acts { margin: 30px 0 0; display: flex; gap: 28px; }
+  .lnk { font-size: 14px; letter-spacing: .12em; color: var(--text); opacity: .8; transition: color .3s, opacity .3s, letter-spacing .4s; }
+  .lnk:hover { color: var(--accent-text); opacity: 1; letter-spacing: .2em; }
+  .hero.empty { grid-template-columns: 1fr; }
+
+  /* ---- chat ---- */
+  .chat { margin-top: 38px; max-width: 660px; }
+  .msgs { max-height: 190px; overflow-y: auto; display: grid; gap: 12px; padding: 18px 0 8px; mask-image: linear-gradient(180deg, transparent 0, #000 22%); -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22%); scrollbar-width: none; }
+  .m { font-size: 14px; line-height: 1.8; animation: rise .7s backwards; }
+  .m.a { color: var(--text); } .m.a::before { content: "— "; color: var(--accent-text); }
+  .m.u { color: var(--muted); text-align: right; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 10px 0 4px; font-size: 12px; color: var(--muted); letter-spacing: .06em; }
+  .chips button:hover { color: var(--accent-text); }
+  .composer { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid color-mix(in srgb, var(--muted) 35%, transparent); transition: border-color .4s; }
+  .composer:focus-within { border-color: var(--accent); }
+  .composer input { flex: 1; background: none; border: 0; color: var(--text); font: inherit; font-size: 14px; padding: 10px 2px; }
+  .composer input:focus { outline: none; }
+  .composer input::placeholder { color: var(--muted); }
+  .composer button { font-size: 20px; color: var(--accent-text); transition: transform .3s; }
+  .composer button:hover { transform: translateX(4px); }
+
+  /* ---- list wall ---- */
+  .wall { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 46px 30px; padding: 30px 0 80px; }
+  .wall button { text-align: left; animation: rise .8s backwards; animation-delay: calc(var(--i) * 40ms); }
+  .wall .cover { transform: none; font-size: 15px; animation: float 7s ease-in-out infinite; animation-delay: calc(var(--i) * -.9s); transition: transform .5s; }
+  .wall button:hover .cover { transform: translateY(-10px) scale(1.04); }
+  .wall .t { margin-top: 14px; font-family: var(--serif); font-size: 15px; }
+  .wall .s { margin-top: 3px; font-size: 12px; color: var(--muted); letter-spacing: .1em; }
+  @keyframes float { 50% { translate: 0 -7px; } }
+
+  .status { position: fixed; right: 22px; bottom: 16px; z-index: 6; display: flex; gap: 14px; font-size: 11px; color: var(--muted); opacity: .5; letter-spacing: .1em; }
+  .status span::before { content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #55b36b; margin-right: 5px; vertical-align: 1px; }
+
+  @media (max-width: 920px) {
+    .main { grid-template-columns: 1fr; }
+    .hero { grid-template-columns: 110px 1fr; min-height: 0; }
+    .top { flex-wrap: wrap; gap: 14px 24px; } .search { order: 5; width: 100%; margin: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body data-view="cal">
+<div class="layer aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+<canvas id="fx" class="layer" aria-hidden="true"></canvas>
+<div class="layer vignette" aria-hidden="true"></div>
+<div class="layer light" id="light" aria-hidden="true"></div>
+<div class="layer grain" aria-hidden="true"></div>
+
+<div class="stage">
+  <header class="top">
+    <div class="brand"><i></i>电影日记</div>
+    <nav class="tabs" role="tablist" aria-label="视图">
+      <button role="tab" aria-selected="true" data-view="cal">日历</button>
+      <button role="tab" aria-selected="false" data-view="list">片单</button>
+    </nav>
+    <div class="search"><label class="sr-only" for="q">搜索电影</label><input id="q" type="search" placeholder="搜索，记下今天看的这一部" autocomplete="off"></div>
+    <div class="sw" id="sw" role="group" aria-label="配色主题"></div>
+  </header>
+
+  <main class="main">
+    <section aria-label="观影日历">
+      <div class="mhead">
+        <div>
+          <h2 class="mnum" id="mnum"></h2>
+          <p class="msub" id="msub"></p>
+        </div>
+        <div class="arrows">
+          <button id="prev" aria-label="上个月">‹</button>
+          <button id="next" aria-label="下个月">›</button>
+        </div>
+      </div>
+      <p class="stats" id="stats" aria-live="polite"></p>
+      <p class="why" id="why"></p>
+      <div class="grid" id="grid"></div>
+    </section>
+
+    <div class="right">
+      <section class="hero" id="hero" aria-live="polite"></section>
+      <section class="chat" aria-label="和日记伙伴聊聊">
+        <div class="msgs" id="msgs" aria-live="polite"></div>
+        <div class="chips" id="chips"><button type="button">这个月我的口味有什么特点？</button><button type="button">按心情推荐下一部</button><button type="button">把这句台词做成海报</button></div>
+        <form class="composer" id="cf"><label class="sr-only" for="ci">输入消息</label><input id="ci" placeholder="说说你的感受，或者问我点什么" autocomplete="off"><button aria-label="发送">↵</button></form>
+      </section>
+    </div>
+  </main>
+
+  <section class="wall" id="wall" aria-label="全部电影"></section>
+</div>
+
+<div class="status" aria-hidden="true"><span>LLM</span><span>生图</span><span>TMDB</span></div>
+
+<script>
+"use strict";
+const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const TODAY = "2025-11-09";
+const root = document.documentElement;
+
+const THEMES = {
+  midnight: { name: "午夜胶片", hint: "剧情 · 默认", bg: "#101116", ac: "#e0a458", fx: "star", light: false },
+  fog:      { name: "冷雾",     hint: "悬疑 / 犯罪 / 惊悚", bg: "#0b1214", ac: "#5cc4c0", fx: "rain", light: false },
+  neon:     { name: "霓虹",     hint: "科幻 / 奇幻", bg: "#090919", ac: "#8b7bff", fx: "streak", light: false },
+  blood:    { name: "暗红",     hint: "恐怖", bg: "#110707", ac: "#e0454b", fx: "ember", light: false },
+  olive:    { name: "军绿",     hint: "战争 / 历史 / 传记", bg: "#11140d", ac: "#b4c46a", fx: "dust", light: false },
+  rose:     { name: "蔷薇",     hint: "爱情 / 文艺", bg: "#f7ece8", ac: "#c9506a", fx: "petal", light: true },
+  cream:    { name: "奶油",     hint: "喜剧 / 动画", bg: "#fbf1d9", ac: "#ee6c3a", fx: "bokeh", light: true },
+  sage:     { name: "鼠尾草",   hint: "治愈 / 纪录 / 家庭", bg: "#e9f0e5", ac: "#3d8c68", fx: "firefly", light: true },
+};
+const GENRE_THEME = {
+  剧情: "midnight", 悬疑: "fog", 犯罪: "fog", 惊悚: "fog", 科幻: "neon", 奇幻: "neon", 恐怖: "blood",
+  战争: "olive", 历史: "olive", 传记: "olive", 爱情: "rose", 文艺: "rose", 喜剧: "cream", 动画: "cream",
+  治愈: "sage", 纪录: "sage", 家庭: "sage",
+};
+
+// [date, title, year, genres, rating, note, tags]
+const RAW = [
+  ["2025-04-06","肖申克的救赎",1994,"剧情",5,"第三次看，放风那场还是红了眼。","经典,希望"],
+  ["2025-04-19","海上钢琴师",1998,"剧情/音乐",4,"他选择留在船上，我想了很久。","音乐,遗憾"],
+  ["2025-04-27","绿皮书",2018,"剧情/喜剧",4,"公路片的温度刚刚好。","友情,公路"],
+  ["2025-05-03","辛德勒的名单",1993,"历史/战争",5,"黑白里那一抹红，看完很久说不出话。","黑白,沉重"],
+  ["2025-05-11","拯救大兵瑞恩",1998,"战争",4,"开场二十分钟，是我看过最真实的登陆。","战争,群像"],
+  ["2025-05-18","一九四二",2012,"历史",3,"沉，但值得被记住。","国产,灾难"],
+  ["2025-05-25","敦刻尔克",2017,"战争/历史",4,"三条时间线，配乐一直在催命。","诺兰,配乐"],
+  ["2025-06-01","小森林 夏秋篇",2014,"治愈",4,"想去乡下做一顿饭。","美食,日常"],
+  ["2025-06-08","海洋",2009,"纪录",4,"安静地看了一个小时的蓝。","纪录片,自然"],
+  ["2025-06-15","海蒂和爷爷",2015,"家庭/治愈",4,"山里的风好像能吹出屏幕。","家庭,自然"],
+  ["2025-06-28","小偷家族",2018,"家庭/剧情",5,"越温柔越难受。","是枝裕和,家庭"],
+  ["2025-07-04","情书",1995,"爱情",5,"一句「你好吗」，我忍了一整个夏天。","初恋,日本"],
+  ["2025-07-12","花样年华",2000,"爱情/文艺",5,"旗袍、走廊、配乐，全是留白。","王家卫,留白"],
+  ["2025-07-20","爱在黎明破晓前",1995,"爱情",4,"走了一夜的路，说了一夜的话。","对话,维也纳"],
+  ["2025-07-26","怦然心动",2010,"爱情/青春",4,"两个人看同一件事，结果不同。","青春,成长"],
+  ["2025-08-02","疯狂动物城",2016,"动画/喜剧",5,"兔子警官太让人想拥抱。","动画,职场"],
+  ["2025-08-09","功夫",2004,"喜剧/动作",4,"包租婆那一嗓子永远好笑。","周星驰,港片"],
+  ["2025-08-16","三傻大闹宝莱坞",2009,"喜剧/剧情",5,"笑完又有点想哭。","印度,成长"],
+  ["2025-08-23","寻梦环游记",2017,"动画/家庭",5,"亡灵节那首歌，我在电影院哭到不行。","皮克斯,亲情"],
+  ["2025-08-30","憨豆先生的假期",2007,"喜剧",3,"没有台词也能笑。","憨豆,公路"],
+  ["2025-09-05","星际穿越",2014,"科幻",5,"五维空间那段，我愿意再看一遍。","诺兰,亲情"],
+  ["2025-09-13","降临",2016,"科幻",5,"语言真的会改变时间观。","语言,时间"],
+  ["2025-09-20","银翼杀手2049",2017,"科幻",4,"画面是一幅一幅的油画。","赛博朋克,视觉"],
+  ["2025-09-27","盗梦空间",2010,"科幻/悬疑",4,"陀螺停没停，已经不重要。","梦境,诺兰"],
+  ["2025-10-04","闪灵",1980,"恐怖",4,"走廊那一幕，我关了灯就后悔。","库布里克,经典"],
+  ["2025-10-12","遗传厄运",2018,"恐怖",4,"后半段彻底失控。","家庭,压抑"],
+  ["2025-10-19","午夜凶铃",1998,"恐怖",3,"电视机前至今不敢坐太近。","日式恐怖,经典"],
+  ["2025-10-31","寂静之地",2018,"恐怖/科幻",4,"全程憋气，连爆米花都不敢嚼。","无声,生存"],
+  ["2025-11-01","杀人回忆",2003,"犯罪/悬疑",5,"结尾那个眼神，直接盯进了现实。","奉俊昊,悬案"],
+  ["2025-11-02","七宗罪",1995,"悬疑/犯罪",5,"盒子里是什么，一直记着。","芬奇,压抑"],
+  ["2025-11-02","致命魔术",2006,"悬疑/科幻",4,"第二遍才看懂每个细节。","诺兰,魔术"],
+  ["2025-11-06","消失的爱人",2014,"悬疑",4,"看完对婚姻有点怀疑。","芬奇,反转"],
+  ["2025-11-08","看不见的客人",2016,"悬疑",4,"反转一层套一层。","西班牙,反转"],
+];
+const MOVIES = RAW.map(([date, title, year, g, rating, note, tags]) =>
+  ({ date, title, year, genres: g.split("/"), rating, note, tags: tags.split(",") }));
+
+const $ = (id) => document.getElementById(id);
+const pad = (n) => String(n).padStart(2, "0");
+const dkey = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
+const stars = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+const CN = ["一","二","三","四","五","六","七","八","九","十","十一","十二"];
+function hue(t) { let h = 0; for (const c of t) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
+
+const params = new URLSearchParams(location.hash.slice(1));
+const state = { y: 2025, m: params.has("m") ? Number(params.get("m")) : 10, mode: params.get("t") || "auto",
+  sel: null, pick: 0, month: [], byDate: new Map(), auto: null, theme: null };
+
+/* ---------- typewriter & count-up ---------- */
+const toks = {};
+function type(el, text, key) {
+  const tok = toks[key] = (toks[key] || 0) + 1;
+  if (RM) { el.textContent = text; return; }
+  el.textContent = ""; el.classList.add("typing");
+  let i = 0;
+  const tick = () => {
+    if (tok !== toks[key]) return;
+    el.textContent = text.slice(0, ++i);
+    if (i < text.length) setTimeout(tick, 34 + Math.random() * 46); else el.classList.remove("typing");
+  };
+  setTimeout(tick, 600);
+}
+function countTo(el, to, dec) {
+  if (RM) { el.textContent = to.toFixed(dec); return; }
+  const t0 = performance.now();
+  const f = (t) => {
+    const k = Math.min((t - t0) / 800, 1), e = 1 - Math.pow(1 - k, 3);
+    el.textContent = (to * e).toFixed(dec);
+    if (k < 1) requestAnimationFrame(f);
+  };
+  requestAnimationFrame(f);
+}
+
+/* ---------- particles: one canvas, one kind per theme ---------- */
+const cv = $("fx"), cx = cv.getContext("2d");
+let W = 0, H = 0, parts = [], fx = null, pending = null, fade = 1, fadeT = 1;
+const rnd = (a, b) => a + Math.random() * (b - a);
+const COUNT = { star: 90, rain: 120, streak: 26, ember: 56, dust: 70, petal: 30, bokeh: 18, firefly: 44 };
+
+function mk(init) {
+  const p = { x: rnd(0, W), y: init ? rnd(0, H) : 0, ph: rnd(0, 6.28), s: rnd(.4, 1) };
+  switch (fx.kind) {
+    case "star": p.r = rnd(.4, 1.5); p.tw = rnd(.6, 2); break;
+    case "rain": p.len = rnd(12, 28); p.v = rnd(520, 820); p.y = init ? rnd(0, H) : -30; break;
+    case "streak": p.len = rnd(70, 170); p.v = rnd(90, 210); p.x = init ? rnd(0, W) : -180; p.y = rnd(0, H); break;
+    case "ember": p.r = rnd(.8, 2.4); p.v = rnd(22, 64); p.y = init ? rnd(0, H) : H + 10; break;
+    case "dust": p.r = rnd(.6, 1.8); p.vx = rnd(4, 14); p.vy = rnd(-4, 4); break;
+    case "petal": p.r = rnd(5, 9); p.v = rnd(26, 52); p.y = init ? rnd(0, H) : -20; p.rot = rnd(0, 6.28); p.vr = rnd(-1, 1); break;
+    case "bokeh": p.r = rnd(26, 90); p.vx = rnd(-6, 6); p.vy = rnd(-9, -2); p.a = rnd(.06, .16); break;
+    case "firefly": p.r = rnd(1, 2.6); p.vx = rnd(-12, 12); p.vy = rnd(-12, 12); break;
+  }
+  return p;
+}
+function seed() { if (fx) parts = Array.from({ length: COUNT[fx.kind] }, () => mk(true)); }
+function resize() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  seed(); if (RM) frame(0, 0);
+}
+function setFx(kind, color, light) {
+  pending = { kind, color, light };
+  if (RM || !fx) commit(); else fadeT = 0;
+}
+function commit() { fx = pending; pending = null; seed(); fadeT = 1; if (RM) frame(0, 0); }
+
+function frame(dt, t) {
+  cx.clearRect(0, 0, W, H);
+  if (!fx) return;
+  cx.globalCompositeOperation = fx.light ? "source-over" : "lighter";
+  cx.fillStyle = fx.color; cx.strokeStyle = fx.color; cx.lineWidth = 1;
+  for (const p of parts) {
+    switch (fx.kind) {
+      case "star":
+        cx.globalAlpha = fade * (.2 + .8 * (.5 + .5 * Math.sin(t * p.tw + p.ph))) * p.s;
+        cx.beginPath(); cx.arc(p.x, p.y, p.r, 0, 6.283); cx.fill(); break;
+      case "rain":
+        p.y += p.v * dt; p.x -= p.v * .15 * dt;
+        if (p.y > H + 30) { p.y = -30; p.x = rnd(0, W + 120); }
+        cx.globalAlpha = fade * .26 * p.s;
+        cx.beginPath(); cx.moveTo(p.x, p.y); cx.lineTo(p.x + p.len * .15, p.y - p.len); cx.stroke(); break;
+      case "streak": {
+        p.x += p.v * dt; p.y -= p.v * .28 * dt;
+        if (p.x > W + 200 || p.y < -80) { p.x = -180; p.y = rnd(0, H); }
+        const g = cx.createLinearGradient(p.x - p.len, p.y + p.len * .28, p.x, p.y);
+        g.addColorStop(0, "transparent"); g.addColorStop(1, fx.color);
+        cx.globalAlpha = fade * .5 * p.s; cx.strokeStyle = g; cx.lineWidth = 1.4;
+        cx.beginPath(); cx.moveTo(p.x - p.len, p.y + p.len * .28); cx.lineTo(p.x, p.y); cx.stroke(); break;
+      }
+      case "ember":
+        p.y -= p.v * dt; p.x += Math.sin(t + p.ph) * 12 * dt;
+        if (p.y < -10) { p.y = H + 10; p.x = rnd(0, W); }
+        cx.globalAlpha = fade * (.12 + .75 * (p.y / H)) * p.s;
+        cx.beginPath(); cx.arc(p.x, p.y, p.r, 0, 6.283); cx.fill(); break;
+      case "dust":
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        if (p.x > W + 5) p.x = -5; if (p.y < -5) p.y = H + 5; if (p.y > H + 5) p.y = -5;
+        cx.globalAlpha = fade * (.2 + .15 * Math.sin(t + p.ph));
+        cx.beginPath(); cx.arc(p.x, p.y, p.r, 0, 6.283); cx.fill(); break;
+      case "petal":
+        p.y += p.v * dt; p.x += (Math.sin(t * 1.1 + p.ph) * 22 + 8) * dt; p.rot += p.vr * dt;
+        if (p.y > H + 20) { p.y = -20; p.x = rnd(0, W); }
+        cx.globalAlpha = fade * .5 * p.s + .1;
+        cx.beginPath(); cx.ellipse(p.x, p.y, p.r, p.r * .55, p.rot, 0, 6.283); cx.fill(); break;
+      case "bokeh":
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        if (p.y < -p.r) { p.y = H + p.r; p.x = rnd(0, W); }
+        if (p.x < -p.r) p.x = W + p.r; if (p.x > W + p.r) p.x = -p.r;
+        cx.globalAlpha = fade * p.a;
+        cx.beginPath(); cx.arc(p.x, p.y, p.r, 0, 6.283); cx.fill(); break;
+      case "firefly": {
+        p.vx = Math.max(-18, Math.min(18, p.vx + rnd(-1, 1) * 30 * dt));
+        p.vy = Math.max(-18, Math.min(18, p.vy + rnd(-1, 1) * 30 * dt));
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        if (p.x < 0) p.x = W; if (p.x > W) p.x = 0; if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
+        const a = (.3 + .7 * (.5 + .5 * Math.sin(t * 1.4 + p.ph))) * fade;
+        const g = cx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 7);
+        g.addColorStop(0, fx.color); g.addColorStop(1, "transparent");
+        cx.globalAlpha = a * (fx.light ? .6 : 1); cx.fillStyle = g;
+        cx.beginPath(); cx.arc(p.x, p.y, p.r * 7, 0, 6.283); cx.fill(); cx.fillStyle = fx.color; break;
+      }
+    }
+  }
+  cx.globalAlpha = 1;
+}
+
+/* ---------- pointer-driven light and cover tilt ---------- */
+let mx = innerWidth * .7, my = innerHeight * .3, tx = mx, ty = my, last = performance.now();
+addEventListener("pointermove", (e) => { tx = e.clientX; ty = e.clientY; });
+function loop(now) {
+  const dt = Math.min((now - last) / 1000, .05); last = now;
+  const k = Math.min(dt * 6, 1);
+  mx += (tx - mx) * k; my += (ty - my) * k;
+  $("light").style.transform = `translate(${mx}px,${my}px)`;
+  const hero = $("hero");
+  hero.style.setProperty("--rx", (((my / H) - .5) * -9).toFixed(2) + "deg");
+  hero.style.setProperty("--ry", (((mx / W) - .5) * 14).toFixed(2) + "deg");
+  hero.style.setProperty("--gx", (50 + (mx / W - .5) * 80).toFixed(1) + "%");
+  if (fade !== fadeT) {
+    fade += Math.sign(fadeT - fade) * dt * 3;
+    fade = fadeT === 0 ? Math.max(0, fade) : Math.min(1, fade);
+    if (pending && fade <= 0) commit();
+  }
+  frame(dt, now / 1000);
+  requestAnimationFrame(loop);
+}
+
+/* ---------- theme ---------- */
+function autoTheme(movies) {
+  if (!movies.length) return { key: "midnight", reason: "这个月还没有记录，先用默认的「午夜胶片」。" };
+  const score = {}, count = {}, labels = {};
+  for (const mv of movies) {
+    const hit = [...new Set(mv.genres.map((g) => GENRE_THEME[g]).filter(Boolean))];
+    if (!hit.length) continue;
+    const w = (0.7 + 0.1 * mv.rating) / hit.length;
+    for (const k of hit) {
+      score[k] = (score[k] || 0) + w; count[k] = (count[k] || 0) + 1;
+      (labels[k] ||= new Set());
+      mv.genres.filter((g) => GENRE_THEME[g] === k).forEach((g) => labels[k].add(g));
+    }
+  }
+  const key = Object.keys(score).sort((a, b) => score[b] - score[a])[0] || "midnight";
+  const tag = [...(labels[key] || [])].slice(0, 2).join(" / ") || "剧情";
+  return { key, reason: `本月看了 ${movies.length} 部，其中 ${count[key] || 0} 部偏「${tag}」，所以用「${THEMES[key].name}」。` };
+}
+function applyTheme(key) {
+  if (state.theme === key) return;
+  state.theme = key;
+  const t = THEMES[key];
+  root.dataset.theme = key;
+  root.classList.toggle("is-light", t.light);
+  setFx(t.fx, t.ac, t.light);
+}
+function refreshTheme() {
+  const key = state.mode === "auto" ? state.auto.key : state.mode;
+  applyTheme(key);
+  $("why").innerHTML = state.mode === "auto"
+    ? state.auto.reason.replace(/「(.+?)」/g, "<b>$1</b>")
+    : `已手动锁定 <b>${THEMES[key].name}</b>，点「自动」恢复按观影类型换色。`;
+  document.querySelectorAll("#sw [data-k]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.k === state.mode)));
+}
+function initSwatches() {
+  const sw = $("sw");
+  const auto = document.createElement("button");
+  auto.className = "auto"; auto.dataset.k = "auto"; auto.textContent = "自动";
+  auto.onclick = () => { state.mode = "auto"; refreshTheme(); };
+  sw.append(auto);
+  for (const [k, t] of Object.entries(THEMES)) {
+    const b = document.createElement("button");
+    b.className = "dot"; b.dataset.k = k; b.title = `${t.name} · ${t.hint}`;
+    b.setAttribute("aria-label", `${t.name}，${t.hint}`);
+    b.style.background = `linear-gradient(135deg, ${t.bg} 48%, ${t.ac} 52%)`;
+    b.style.boxShadow = `0 0 0 1px ${t.ac}55`;
+    b.onclick = () => { state.mode = k; refreshTheme(); };
+    sw.append(b);
+  }
+}
+
+/* ---------- month / calendar ---------- */
+function renderMonth() {
+  const { y, m } = state, prefix = `${y}-${pad(m + 1)}`;
+  state.month = MOVIES.filter((mv) => mv.date.startsWith(prefix));
+  state.auto = autoTheme(state.month);
+  state.byDate = new Map();
+  for (const mv of state.month) (state.byDate.get(mv.date) || state.byDate.set(mv.date, []).get(mv.date)).push(mv);
+
+  $("mnum").innerHTML = `${m + 1}<small>月</small>`;
+  $("mnum").setAttribute("aria-label", `${y}年${m + 1}月`);
+  $("msub").textContent = `${y} · ${CN[m]}月`;
+  $("prev").disabled = m <= 3; $("next").disabled = m >= 10;
+
+  const n = state.month.length;
+  if (n) {
+    const avg = state.month.reduce((s, x) => s + x.rating, 0) / n;
+    $("stats").innerHTML = `<b class="cnt" data-to="${n}" data-dec="0">0</b> 部<i>·</i>均分 <b class="cnt" data-to="${avg.toFixed(1)}" data-dec="1">0</b><i>·</i>色调 <b>${THEMES[state.auto.key].name}</b>`;
+    $("stats").querySelectorAll(".cnt").forEach((e) => countTo(e, +e.dataset.to, +e.dataset.dec));
+  } else $("stats").textContent = "这个月还是空白";
+
+  const grid = $("grid"), frag = document.createDocumentFragment();
+  for (const w of "一二三四五六日") { const d = document.createElement("div"); d.className = "dow"; d.textContent = w; d.setAttribute("aria-hidden", "true"); frag.append(d); }
+  const first = (new Date(y, m, 1).getDay() + 6) % 7, total = new Date(y, m + 1, 0).getDate();
+  for (let i = 0; i < first; i++) { const b = document.createElement("div"); b.className = "day blank"; b.setAttribute("aria-hidden", "true"); frag.append(b); }
+  for (let d = 1; d <= total; d++) {
+    const k = dkey(y, m, d), list = state.byDate.get(k) || [];
+    const b = document.createElement("button");
+    b.className = "day" + (list.length ? " has" : "") + (k === TODAY ? " today" : "");
+    b.dataset.k = k; b.style.setProperty("--i", String(first + d));
+    b.setAttribute("aria-label", `${m + 1}月${d}日` + (list.length ? `，看了${list.map((x) => `《${x.title}》`).join("、")}` : "，没有记录"));
+    b.innerHTML = (list.length ? `<i class="orb" style="--h:${hue(list[0].title)}"></i>` : "") +
+      (list.length > 1 ? `<i class="orb b" style="--h:${hue(list[1].title)}"></i>` : "") +
+      `<span class="n">${d}</span>` + (list.length ? `<span class="tip">${list.map((x) => x.title).join(" · ")}</span>` : "");
+    b.onclick = () => selectDay(k);
+    frag.append(b);
+  }
+  grid.replaceChildren(frag);
+
+  const days = [...state.byDate.keys()].sort();
+  state.sel = null;
+  selectDay(days.length ? days[days.length - 1] : `${prefix}-01`);
+  refreshTheme();
+  renderChat();
+}
+
+function selectDay(k) {
+  state.sel = k; state.pick = 0;
+  document.querySelectorAll("#grid .day[data-k]").forEach((b) => {
+    const on = b.dataset.k === k;
+    b.classList.toggle("sel", on); b.setAttribute("aria-pressed", String(on));
+  });
+  renderHero();
+}
+
+function renderHero() {
+  const list = state.byDate.get(state.sel) || [];
+  const [y, m, d] = state.sel.split("-").map(Number);
+  const date = `${m}月${d}日 周${"日一二三四五六"[new Date(y, m - 1, d).getDay()]}`;
+  const hero = $("hero");
+  if (!list.length) {
+    hero.className = "hero empty";
+    hero.innerHTML = `<div class="txt"><p class="eyebrow">${date}</p><h1 class="title faint">这一天，银幕是黑的</h1>` +
+      `<p class="sub">想补记这天看过的电影？</p><div class="acts"><button class="lnk">+ 记一部 →</button></div></div>`;
+    return;
+  }
+  state.pick = Math.min(state.pick, list.length - 1);
+  const mv = list[state.pick], h = hue(mv.title);
+  root.style.setProperty("--mh", h);
+  hero.className = "hero";
+  hero.innerHTML =
+    `<div class="cover" style="--h:${h}"><span>${mv.title}</span></div>` +
+    `<div class="txt">` +
+    `<p class="eyebrow">${date}${list.length > 1 ? ` · 第 ${state.pick + 1} / ${list.length} 部` : ""}</p>` +
+    `<h1 class="title" aria-label="${mv.title}">${[...mv.title].map((c, i) => `<span aria-hidden="true" style="--c:${i}">${c === " " ? "&nbsp;" : c}</span>`).join("")}</h1>` +
+    `<p class="sub"><span>${mv.year} · ${mv.genres.join(" / ")}</span><span class="stars" role="img" aria-label="${mv.rating} 星">${stars(mv.rating)}</span></p>` +
+    `<blockquote class="note"><span class="sr-only">${mv.note}</span><span class="ty" aria-hidden="true"></span></blockquote>` +
+    `<p class="tags">${mv.tags.map((t) => `<span>${t}</span>`).join("")}</p>` +
+    (list.length > 1 ? `<div class="picker" role="tablist" aria-label="当天的电影">${list.map((x, i) => `<button role="tab" aria-selected="${i === state.pick}" data-i="${i}">${x.title}</button>`).join("")}</div>` : "") +
+    `<div class="acts"><button class="lnk">+ 记一部 →</button><button class="lnk">聊聊这部 →</button></div>` +
+    `</div>`;
+  hero.querySelectorAll(".picker button").forEach((b) => b.onclick = () => { state.pick = Number(b.dataset.i); renderHero(); });
+  type(hero.querySelector(".ty"), mv.note, "note");
+}
+
+/* ---------- chat ---------- */
+function addMsg(role, text, animate) {
+  const box = $("msgs"), div = document.createElement("div");
+  div.className = `m ${role === "a" ? "a" : "u"}`;
+  const span = document.createElement("span");
+  div.append(span); box.append(div); box.scrollTop = box.scrollHeight;
+  if (animate) type(span, text, "chat" + box.childElementCount); else span.textContent = text;
+  return div;
+}
+function renderChat() {
+  $("msgs").replaceChildren();
+  const n = state.month.length, name = THEMES[state.auto.key].name;
+  addMsg("a", n ? `这个月你看了 ${n} 部，整体是「${name}」的氛围。想先聊哪一部？` : "这个月还没有记录。想从哪一部开始？", false);
+  if (n) {
+    addMsg("u", "最近好像总在看让人心里发紧的片子。", false);
+    addMsg("a", "评分最高的几部都带点压抑感，但结尾你都给了好评，说明你吃「有余味」的叙事。", true);
+  }
+}
+$("cf").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const v = $("ci").value.trim(); if (!v) return;
+  addMsg("u", v, false); $("ci").value = "";
+  addMsg("a", "（设计稿里这里会接上真实的 Agent 回复，并附来源链接。）", true);
+});
+$("chips").querySelectorAll("button").forEach((b) => b.onclick = () => { $("ci").value = b.textContent; $("ci").focus(); });
+
+/* ---------- list wall ---------- */
+function renderWall() {
+  $("wall").replaceChildren(...[...MOVIES].sort((a, b) => b.date.localeCompare(a.date)).map((mv, i) => {
+    const b = document.createElement("button");
+    b.style.setProperty("--i", String(i));
+    b.innerHTML = `<div class="cover" style="--h:${hue(mv.title)}"><span>${mv.title}</span></div><div class="t">${mv.title}</div><div class="s">${mv.date.slice(5)} · ${stars(mv.rating)}</div>`;
+    b.onclick = () => { state.m = Number(mv.date.slice(5, 7)) - 1; setView("cal"); renderMonth(); selectDay(mv.date); };
+    return b;
+  }));
+}
+
+/* ---------- view, month nav, boot ---------- */
+function setView(v) {
+  document.body.dataset.view = v;
+  document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-selected", String(x.dataset.view === v)));
+}
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+function swap(dm) {
+  state.m = Math.max(3, Math.min(10, state.m + dm));
+  renderMonth();
+  if (!RM) $("mnum").animate([{ opacity: 0, transform: `translateY(${dm * 16}px)`, filter: "blur(10px)" }, { opacity: 1, transform: "none", filter: "blur(0)" }], { duration: 700, easing: "cubic-bezier(.2,.7,.2,1)" });
+}
+$("prev").onclick = () => swap(-1);
+$("next").onclick = () => swap(1);
+
+addEventListener("resize", resize);
+initSwatches(); renderWall(); resize(); renderMonth();
+if (RM) { $("light").style.transform = `translate(${mx}px,${my}px)`; } else requestAnimationFrame(loop);
+</script>
+</body>
+</html>

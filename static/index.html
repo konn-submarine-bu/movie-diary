@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="midnight">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>电影日记</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body data-view="cal">
+  <div class="layer aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+  <canvas id="fx" class="layer" aria-hidden="true"></canvas>
+  <div class="layer vignette" aria-hidden="true"></div>
+  <div class="layer light" id="light" aria-hidden="true"></div>
+  <div class="layer grain" aria-hidden="true"></div>
+
+  <div class="stage">
+    <header class="top">
+      <div class="brand"><i></i>电影日记</div>
+      <nav class="tabs" role="tablist" aria-label="视图">
+        <button type="button" role="tab" aria-selected="true" data-view="cal">日历</button>
+        <button type="button" role="tab" aria-selected="false" data-view="list">片单</button>
+        <button type="button" role="tab" aria-selected="false" data-view="wish">想看</button>
+        <button type="button" role="tab" aria-selected="false" data-view="clips">收藏</button>
+      </nav>
+      <div class="search">
+        <form id="search-form" role="search">
+          <label class="sr-only" for="search-input">搜索电影</label>
+          <input id="search-input" type="search" placeholder="搜索电影" autocomplete="off">
+        </form>
+        <div id="search-results" class="results" hidden></div>
+      </div>
+      <div class="sw" id="sw" role="group" aria-label="配色主题"></div>
+    </header>
+    <div id="diary-error" class="error" role="alert" hidden></div>
+
+    <main class="main">
+      <section aria-label="观影日历">
+        <div class="mhead">
+          <div>
+            <h2 class="mnum" id="mnum"></h2>
+            <p class="msub" id="msub"></p>
+          </div>
+          <div class="arrows">
+            <button type="button" id="prev" aria-label="上个月">‹</button>
+            <button type="button" id="today" class="today-btn">今天</button>
+            <button type="button" id="next" aria-label="下个月">›</button>
+          </div>
+        </div>
+        <p class="stats" id="stats" aria-live="polite"></p>
+        <p class="why" id="why"></p>
+        <div class="grid" id="grid"></div>
+        <p class="undated" id="undated" hidden></p>
+      </section>
+
+      <div class="right">
+        <p class="otd" id="otd" hidden></p>
+        <section class="hero" id="hero" aria-live="polite"></section>
+        <section class="chat" aria-label="和日记伙伴聊聊">
+          <div class="chat-head">
+            <span id="chat-scope"></span>
+            <span class="chat-tools">
+              <button type="button" id="global-btn" hidden>回到全局对话</button>
+              <button type="button" id="clear-btn">清空对话</button>
+            </span>
+          </div>
+          <div class="msgs" id="messages" aria-live="polite"></div>
+          <div id="chat-error" class="error" role="alert" hidden></div>
+          <div class="chips" id="suggestions"></div>
+          <form class="composer" id="chat-form">
+            <label class="sr-only" for="chat-input">输入消息</label>
+            <textarea id="chat-input" rows="1" placeholder="说说你的感受，或者问我点什么" maxlength="4000"></textarea>
+            <button type="submit" id="send-btn" aria-label="发送">↵</button>
+          </form>
+        </section>
+      </div>
+    </main>
+
+    <section class="wall" id="wall" aria-label="全部电影"></section>
+    <section class="wish" id="wish" aria-label="想看清单"></section>
+    <section class="clipwall" id="clipwall" aria-label="台词与截图收藏"></section>
+  </div>
+
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+
+  <dialog id="poster-dialog">
+    <form method="dialog" class="dialog-body" id="poster-form">
+      <h3>台词做成海报</h3>
+      <p class="muted" id="poster-movie"></p>
+      <div class="modes" role="group" aria-label="海报样式">
+        <button type="button" data-mode="collage" aria-pressed="true">剧照拼贴 · 几秒，可多句</button>
+        <button type="button" data-mode="ai" aria-pressed="false">AI 生图 · 约 2-3 分钟，单句</button>
+      </div>
+      <label class="sr-only" for="poster-quote">台词，每行一句</label>
+      <textarea id="poster-quote" rows="3" maxlength="600" placeholder="写下台词，每行一句；或从下面勾选" required></textarea>
+      <p class="muted" id="poster-count"></p>
+      <div class="qtools">
+        <button type="button" id="quote-lookup" class="lnk">查 Wikiquote 台词</button>
+        <button type="button" id="quote-save" class="lnk" hidden>收藏所选</button>
+      </div>
+      <div id="quote-cands" class="cands" aria-live="polite"></div>
+      <div id="poster-error" class="error" role="alert" hidden></div>
+      <div class="dialog-actions">
+        <button type="button" id="poster-cancel" class="lnk">取消</button>
+        <button type="submit" id="poster-submit" class="lnk strong">生成</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="clip-dialog">
+    <form method="dialog" class="dialog-body" id="clip-form">
+      <h3>收藏台词</h3>
+      <p class="muted" id="clip-movie"></p>
+      <label class="sr-only" for="clip-text">台词</label>
+      <textarea id="clip-text" rows="3" maxlength="2000" placeholder="写下那句台词" required></textarea>
+      <label class="sr-only" for="clip-note">为什么喜欢</label>
+      <input id="clip-note" type="text" maxlength="200" placeholder="为什么喜欢（可选）" autocomplete="off">
+      <div id="clip-error" class="error" role="alert" hidden></div>
+      <div class="dialog-actions">
+        <button type="button" id="clip-cancel" class="lnk">取消</button>
+        <button type="submit" id="clip-submit" class="lnk strong">收藏</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="poem-dialog">
+    <div class="dialog-body">
+      <h3>一键成诗</h3>
+      <p class="muted" id="poem-movie"></p>
+      <div class="poets" id="poem-poets" role="group" aria-label="诗人文风"></div>
+      <div class="poem" id="poem-out" aria-live="polite"></div>
+      <div id="poem-error" class="error" role="alert" hidden></div>
+      <div class="dialog-actions">
+        <button type="button" id="poem-save" class="lnk strong" disabled>保存</button>
+        <button type="button" id="poem-copy" class="lnk">复制</button>
+        <button type="button" id="poem-again" class="lnk">再写一首</button>
+        <button type="button" id="poem-close" class="lnk strong">关闭</button>
+      </div>
+    </div>
+  </dialog>
+
+  <input type="file" id="shot-input" accept="image/*" hidden>
+
+  <dialog id="image-dialog">
+    <img id="image-full" alt="">
+    <div class="dialog-actions">
+      <a id="image-download" class="lnk strong" download>下载</a>
+      <button type="button" id="image-close" class="lnk">关闭</button>
+    </div>
+  </dialog>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

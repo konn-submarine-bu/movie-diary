@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>电影日记 · 设计稿</title>
+<style>
+  :root {
+    --bg: #0e0f13;
+    --surface: #16181f;
+    --surface-2: #1d2029;
+    --line: #272b36;
+    --text: #ece9e2;
+    --muted: #8d909b;
+    --accent: #e0a458;
+    --accent-soft: rgba(224, 164, 88, .14);
+    --danger: #e5786d;
+    --ok: #7fb685;
+    --radius: 14px;
+    font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* top bar */
+  .topbar { display: flex; align-items: center; gap: 24px; padding: 14px 28px; border-bottom: 1px solid var(--line); }
+  .brand { font-size: 18px; font-weight: 700; letter-spacing: 3px; display: flex; align-items: center; gap: 10px; }
+  .brand i { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+  .tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .tabs button { background: none; border: 0; padding: 6px 16px; border-radius: 8px; font-size: 14px; color: var(--muted); }
+  .tabs button[aria-selected="true"] { background: var(--surface-2); color: var(--text); }
+  .search { flex: 1; max-width: 420px; margin-left: auto; position: relative; }
+  .search input { width: 100%; background: var(--surface); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 9px 14px; font: inherit; font-size: 14px; }
+  .dots { display: flex; gap: 12px; font-size: 12px; color: var(--muted); }
+  .dots span::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; background: var(--ok); }
+  .dots span.off::before { background: var(--danger); }
+
+  /* layout */
+  .layout { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 24px; padding: 24px 28px; min-height: 0; }
+
+  /* calendar */
+  .cal-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 16px; }
+  .cal-head h2 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: 1px; }
+  .cal-head h2 small { font-size: 15px; color: var(--muted); font-weight: 400; margin-left: 10px; }
+  .nav { display: flex; gap: 6px; }
+  .nav button { background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 7px 13px; font-size: 14px; }
+  .nav button:hover { border-color: var(--accent); }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px; }
+  .stat b { display: block; font-size: 24px; margin-top: 2px; }
+  .stat span { font-size: 12px; color: var(--muted); }
+  .stat b em { font-style: normal; color: var(--accent); }
+
+  .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+  .dow { text-align: center; font-size: 12px; color: var(--muted); padding-bottom: 4px; }
+  .day {
+    position: relative; aspect-ratio: 1 / 1.12; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 12px; padding: 8px; text-align: left; overflow: hidden; display: flex; flex-direction: column;
+  }
+  .day:hover { border-color: #3a4050; }
+  .day.out { opacity: .32; pointer-events: none; }
+  .day .n { font-size: 13px; color: var(--muted); position: relative; z-index: 2; }
+  .day.today .n { color: #1a1408; background: var(--accent); border-radius: 50%; width: 22px; height: 22px; display: grid; place-items: center; font-weight: 700; margin: -2px 0 0 -2px; }
+  .day.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 8px 24px rgba(224,164,88,.12); }
+  .day.has .n { color: var(--text); }
+  .day .poster { position: absolute; inset: 0; background-size: cover; opacity: .9; }
+  .day .poster::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(14,15,19,.72) 0%, rgba(14,15,19,.05) 40%, rgba(14,15,19,.88) 100%); }
+  .day .cap { position: relative; z-index: 2; margin-top: auto; font-size: 12px; font-weight: 600; line-height: 1.25; text-shadow: 0 1px 6px rgba(0,0,0,.7); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .day .more { position: absolute; top: 7px; right: 7px; z-index: 2; background: var(--accent); color: #1a1408; font-size: 11px; font-weight: 700; border-radius: 9px; padding: 1px 7px; }
+  .day .mini { position: relative; z-index: 2; color: var(--accent); font-size: 10px; letter-spacing: 1px; }
+
+  /* side panel */
+  .side { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+  .day-head { padding: 18px 20px 4px; }
+  .day-head .date { font-size: 13px; color: var(--muted); }
+  .day-head h3 { margin: 2px 0 0; font-size: 22px; }
+  .movie { display: grid; grid-template-columns: 84px 1fr; gap: 14px; padding: 16px 20px; border-top: 1px solid var(--line); }
+  .movie:first-of-type { border-top: 0; }
+  .cover { width: 84px; aspect-ratio: 2 / 3; border-radius: 8px; background-size: cover; display: flex; align-items: flex-end; padding: 6px; font-size: 11px; font-weight: 700; line-height: 1.2; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+  .movie h4 { margin: 0; font-size: 16px; }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .stars { color: var(--accent); letter-spacing: 2px; margin-top: 6px; font-size: 14px; }
+  .note { font-size: 13.5px; line-height: 1.65; margin: 8px 0; color: #d3d0c9; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag { font-size: 11px; background: var(--accent-soft); color: var(--accent); border-radius: 10px; padding: 2px 9px; }
+  .actions { display: flex; gap: 6px; margin-top: 10px; }
+  .btn { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 11px; font-size: 12px; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); color: #1a1408; border-color: var(--accent); font-weight: 600; }
+  .add { margin: 0 20px 18px; width: calc(100% - 40px); background: none; border: 1px dashed #3a4050; border-radius: 10px; padding: 10px; color: var(--muted); font-size: 13px; }
+  .add:hover { color: var(--accent); border-color: var(--accent); }
+  .empty { padding: 30px 20px 18px; text-align: center; color: var(--muted); font-size: 14px; }
+
+  /* chat */
+  .chat { flex: 1; display: flex; flex-direction: column; min-height: 260px; }
+  .chat-title { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 600; }
+  .chat-title small { color: var(--muted); font-weight: 400; }
+  .msgs { flex: 1; padding: 14px 18px; display: grid; align-content: start; gap: 10px; overflow-y: auto; }
+  .m { max-width: 88%; font-size: 13.5px; line-height: 1.65; padding: 9px 13px; border-radius: 12px; }
+  .m.a { background: var(--surface-2); border-bottom-left-radius: 3px; }
+  .m.u { justify-self: end; background: var(--accent); color: #1a1408; border-bottom-right-radius: 3px; }
+  .m a { color: var(--accent); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 18px 8px; }
+  .chip { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 14px; padding: 3px 11px; font-size: 12px; }
+  .chip:hover { color: var(--text); border-color: var(--accent); }
+  .composer { display: flex; gap: 8px; padding: 0 18px 16px; }
+  .composer input { flex: 1; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; color: var(--text); font: inherit; font-size: 14px; }
+
+  /* list view */
+  .list { display: none; }
+  body[data-view="list"] .list { display: grid; }
+  body[data-view="list"] .calview { display: none; }
+  .list { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; align-content: start; }
+  .tile { background: none; border: 0; padding: 0; text-align: left; }
+  .tile .cover { width: 100%; height: auto; }
+  .tile b { display: block; font-size: 13px; margin-top: 8px; }
+  .tile span { font-size: 12px; color: var(--muted); }
+
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    .topbar { flex-wrap: wrap; }
+    .dots { display: none; }
+  }
+</style>
+</head>
+<body data-view="cal">
+  <header class="topbar">
+    <div class="brand"><i></i>电影日记</div>
+    <div class="tabs" role="tablist" aria-label="视图切换">
+      <button role="tab" aria-selected="true" data-view="cal">日历</button>
+      <button role="tab" aria-selected="false" data-view="list">片单</button>
+    </div>
+    <div class="search">
+      <label class="sr-only" for="q">搜索电影</label>
+      <input id="q" type="search" placeholder="搜索电影，记下今天看的这一部" autocomplete="off">
+    </div>
+    <div class="dots" aria-label="服务状态"><span>LLM</span><span>生图</span><span>TMDB</span><span class="off">搜索</span></div>
+  </header>
+
+  <main class="layout">
+    <section class="calview" aria-label="观影日历">
+      <div class="cal-head">
+        <h2 id="title"></h2>
+        <div class="nav">
+          <button id="prev" aria-label="上个月">‹</button>
+          <button id="today">今天</button>
+          <button id="next" aria-label="下个月">›</button>
+        </div>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="grid" id="grid"></div>
+    </section>
+
+    <section class="list" id="list" aria-label="全部电影"></section>
+
+    <aside class="side">
+      <div class="card" id="detail"></div>
+      <div class="card chat">
+        <div class="chat-title"><span id="chat-name">和日记伙伴聊聊</span><small>全局对话</small></div>
+        <div class="msgs" id="msgs"></div>
+        <div class="chips" id="chips"></div>
+        <form class="composer" onsubmit="return false">
+          <label class="sr-only" for="ci">输入消息</label>
+          <input id="ci" placeholder="说说你的感受，或者问我点什么">
+          <button class="btn primary">发送</button>
+        </form>
+      </div>
+    </aside>
+  </main>
+
+<script>
+"use strict";
+// 示例数据：日期按“当月第几天”生成，保证打开时日历总是有内容
+const COLORS = [
+  ["#3b2a55", "#c0507a"], ["#12384a", "#3fa7a0"], ["#4a2a14", "#e0a458"],
+  ["#1e2f1a", "#7fb685"], ["#2a1f3d", "#6f7fe0"], ["#3d1a1a", "#e5786d"],
+];
+const SAMPLE = [
+  { d: 2,  title: "花样年华", year: 2000, dir: "王家卫", rating: 5, c: 2, tags: ["旗袍", "克制"], note: "什么都没发生，又好像什么都发生了。走廊里错身那一下，比任何台词都重。" },
+  { d: 5,  title: "千与千寻", year: 2001, dir: "宫崎骏", rating: 5, c: 1, tags: ["成长", "治愈"], note: "名字被拿走的那段，看得鼻酸。" },
+  { d: 9,  title: "寄生虫", year: 2019, dir: "奉俊昊", rating: 4, c: 3, tags: ["阶级", "黑色幽默"], note: "楼梯的上与下，镜头一直在说话。" },
+  { d: 9,  title: "小偷家族", year: 2018, dir: "是枝裕和", rating: 4, c: 0, tags: ["家庭"], note: "一天两部，后劲很大。" },
+  { d: 14, title: "降临", year: 2016, dir: "丹尼斯·维伦纽瓦", rating: 5, c: 4, tags: ["科幻", "时间"], note: "如果知道结局，你还会选择开始吗。" },
+  { d: 18, title: "海边的曼彻斯特", year: 2016, dir: "肯尼思·罗纳根", rating: 4, c: 5, tags: ["悲伤", "沉默"], note: "有些伤口不会好，只能学着带着走。" },
+  { d: 23, title: "霸王别姬", year: 1993, dir: "陈凯歌", rating: 5, c: 3, tags: ["经典", "戏"], note: "不疯魔不成活，二刷还是哭。" },
+];
+
+const now = new Date();
+let cursor = new Date(now.getFullYear(), now.getMonth(), 1);
+let selected = iso(new Date(now.getFullYear(), now.getMonth(), Math.min(now.getDate(), 9)));
+const $ = (id) => document.getElementById(id);
+const pad = (n) => String(n).padStart(2, "0");
+function iso(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+const movies = SAMPLE.map((m, i) => ({
+  ...m, id: i + 1,
+  date: iso(new Date(now.getFullYear(), now.getMonth(), m.d)),
+}));
+const grad = (c) => `linear-gradient(160deg, ${COLORS[c][0]}, ${COLORS[c][1]})`;
+const stars = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+const byDate = (date) => movies.filter((m) => m.date === date);
+
+function renderStats() {
+  const ym = iso(cursor).slice(0, 7);
+  const list = movies.filter((m) => m.date.startsWith(ym));
+  const avg = list.length ? (list.reduce((s, m) => s + m.rating, 0) / list.length).toFixed(1) : "–";
+  const days = new Set(list.map((m) => m.date)).size;
+  $("stats").innerHTML =
+    `<div class="stat"><span>本月观影</span><b><em>${list.length}</em> 部</b></div>` +
+    `<div class="stat"><span>观影天数</span><b><em>${days}</em> 天</b></div>` +
+    `<div class="stat"><span>平均评分</span><b><em>${avg}</em> ★</b></div>`;
+}
+
+function renderGrid() {
+  $("title").innerHTML = `${cursor.getFullYear()} 年 ${cursor.getMonth() + 1} 月<small>${["日","一","二","三","四","五","六"][0] && ""}</small>`;
+  const grid = $("grid");
+  grid.replaceChildren();
+  "日一二三四五六".split("").forEach((w) => {
+    const h = document.createElement("div"); h.className = "dow"; h.textContent = w; grid.append(h);
+  });
+  const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const total = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+  for (let i = 0; i < first.getDay(); i++) {
+    const b = document.createElement("div"); b.className = "day out"; grid.append(b);
+  }
+  for (let d = 1; d <= total; d++) {
+    const date = iso(new Date(cursor.getFullYear(), cursor.getMonth(), d));
+    const list = byDate(date);
+    const btn = document.createElement("button");
+    btn.className = "day" + (list.length ? " has" : "") + (date === iso(now) ? " today" : "") + (date === selected ? " sel" : "");
+    btn.setAttribute("aria-label", `${cursor.getMonth() + 1}月${d}日` + (list.length ? `，看了${list.map((m) => m.title).join("、")}` : "，没有记录"));
+    let inner = `<span class="n">${d}</span>`;
+    if (list.length) {
+      inner = `<div class="poster" style="background-image:${grad(list[0].c)}"></div>` + inner;
+      if (list.length > 1) inner += `<span class="more">${list.length}</span>`;
+      inner += `<span class="cap">${list[0].title}</span>`;
+    }
+    btn.innerHTML = inner;
+    btn.addEventListener("click", () => { selected = date; renderAll(); });
+    grid.append(btn);
+  }
+}
+
+function renderDetail() {
+  const list = byDate(selected);
+  const dt = new Date(selected + "T00:00:00");
+  const wk = "日一二三四五六"[dt.getDay()];
+  let html = `<div class="day-head"><div class="date">周${wk}</div><h3>${dt.getMonth() + 1} 月 ${dt.getDate()} 日</h3></div>`;
+  if (!list.length) {
+    html += `<div class="empty">这一天还没有记录</div>`;
+  }
+  for (const m of list) {
+    html += `<article class="movie">
+      <div class="cover" style="background-image:${grad(m.c)}">${m.title}</div>
+      <div>
+        <h4>${m.title}</h4>
+        <div class="meta">${m.year} · ${m.dir}</div>
+        <div class="stars" aria-label="${m.rating} 星">${stars(m.rating)}</div>
+        <p class="note">${m.note}</p>
+        <div class="tags">${m.tags.map((t) => `<span class="tag">${t}</span>`).join("")}</div>
+        <div class="actions">
+          <button class="btn primary" data-chat="${m.id}">聊这部</button>
+          <button class="btn">台词海报</button>
+          <button class="btn">编辑</button>
+        </div>
+      </div>
+    </article>`;
+  }
+  html += `<button class="add">＋ 在这天添加一部电影</button>`;
+  $("detail").innerHTML = html;
+  $("detail").querySelectorAll("[data-chat]").forEach((b) =>
+    b.addEventListener("click", () => openChat(movies.find((m) => m.id === +b.dataset.chat))));
+}
+
+function say(cls, text) {
+  const d = document.createElement("div"); d.className = `m ${cls}`; d.textContent = text; $("msgs").append(d);
+}
+function openChat(m) {
+  $("chat-name").textContent = m ? `聊《${m.title}》` : "和日记伙伴聊聊";
+  $("msgs").replaceChildren();
+  if (m) {
+    say("a", `你给《${m.title}》打了 ${m.rating} 星，写的是“${m.note.slice(0, 18)}…”。最打动你的是哪一个画面？`);
+    $("chips").replaceChildren(...["为什么适合我", "联网查幕后", "创作指引", "做台词海报"].map(chipEl));
+  } else {
+    say("a", "这个月你看了 " + movies.filter((x) => x.date.startsWith(iso(cursor).slice(0, 7))).length + " 部，偏爱克制又有余味的片子。想聊哪一部，或者让我推荐下一部？");
+    $("chips").replaceChildren(...["这个月的观影口味", "按我的评分推荐", "哪天看得最多"].map(chipEl));
+  }
+}
+function chipEl(t) { const b = document.createElement("button"); b.className = "chip"; b.textContent = t; return b; }
+
+function renderList() {
+  $("list").innerHTML = [...movies].sort((a, b) => b.date.localeCompare(a.date)).map((m) =>
+    `<button class="tile"><div class="cover" style="background-image:${grad(m.c)}">${m.title}</div><b>${m.title}</b><span>${m.date.slice(5)} · ${stars(m.rating)}</span></button>`).join("");
+}
+
+function renderAll() { renderStats(); renderGrid(); renderDetail(); }
+$("prev").onclick = () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1); renderAll(); };
+$("next").onclick = () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1); renderAll(); };
+$("today").onclick = () => { cursor = new Date(now.getFullYear(), now.getMonth(), 1); selected = iso(now); renderAll(); };
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
+  document.body.dataset.view = b.dataset.view;
+  document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+}));
+
+renderAll(); renderList(); openChat(null);
+</script>
+</body>
+</html>

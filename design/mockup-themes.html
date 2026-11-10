@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="midnight">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>电影日记 · 主题设计稿</title>
+<style>
+  @property --bg { syntax: '<color>'; inherits: true; initial-value: #101116; }
+  @property --surface { syntax: '<color>'; inherits: true; initial-value: #181a22; }
+  @property --surface2 { syntax: '<color>'; inherits: true; initial-value: #20232d; }
+  @property --line { syntax: '<color>'; inherits: true; initial-value: #2a2e3a; }
+  @property --text { syntax: '<color>'; inherits: true; initial-value: #ece9e2; }
+  @property --muted { syntax: '<color>'; inherits: true; initial-value: #8d909b; }
+  @property --accent { syntax: '<color>'; inherits: true; initial-value: #e0a458; }
+  @property --accent-text { syntax: '<color>'; inherits: true; initial-value: #e0a458; }
+  @property --ink { syntax: '<color>'; inherits: true; initial-value: #1a1408; }
+  @property --glow1 { syntax: '<color>'; inherits: true; initial-value: rgba(224,164,88,.16); }
+  @property --glow2 { syntax: '<color>'; inherits: true; initial-value: rgba(120,90,200,.10); }
+
+  /* ---- 8 themes: only variables differ, layout is shared ---- */
+  :root, html[data-theme=midnight] { --bg:#101116; --surface:#181a22; --surface2:#20232d; --line:#2a2e3a; --text:#ece9e2; --muted:#8d909b; --accent:#e0a458; --accent-text:#e0a458; --ink:#1a1408; --glow1:rgba(224,164,88,.16); --glow2:rgba(120,90,200,.10); --shadow:0 10px 30px rgba(0,0,0,.35); --display:-apple-system,"PingFang SC","Hiragino Sans GB",sans-serif; --track:1px; }
+  html[data-theme=fog]   { --bg:#0d1315; --surface:#141c1f; --surface2:#1b2528; --line:#263337; --text:#e3ecec; --muted:#86989b; --accent:#5cc4c0; --accent-text:#5cc4c0; --ink:#04201f; --glow1:rgba(92,196,192,.14); --glow2:rgba(60,90,120,.16); --shadow:0 10px 30px rgba(0,0,0,.4); --track:1px; }
+  html[data-theme=neon]  { --bg:#0a0a1c; --surface:#121230; --surface2:#1a1a40; --line:#2a2a58; --text:#e8e8ff; --muted:#8f90bf; --accent:#8b7bff; --accent-text:#a99dff; --ink:#0d0830; --glow1:rgba(139,123,255,.24); --glow2:rgba(46,230,214,.12); --shadow:0 10px 34px rgba(30,20,120,.4); --track:2px; }
+  html[data-theme=blood] { --bg:#110808; --surface:#1a0f0f; --surface2:#241414; --line:#3a1d1d; --text:#eddcd8; --muted:#a08581; --accent:#e0454b; --accent-text:#f06a6f; --ink:#260606; --glow1:rgba(224,69,75,.16); --glow2:rgba(90,0,0,.28); --shadow:0 10px 30px rgba(0,0,0,.5); --track:1px; }
+  html[data-theme=olive] { --bg:#12150e; --surface:#1a1e14; --surface2:#23281b; --line:#323925; --text:#e6e8d8; --muted:#929780; --accent:#b4c46a; --accent-text:#b4c46a; --ink:#1c2205; --glow1:rgba(180,196,106,.12); --glow2:rgba(140,100,50,.12); --shadow:0 10px 30px rgba(0,0,0,.4); --display:"Songti SC","Noto Serif SC","STSong",serif; --track:1px; }
+  html[data-theme=rose]  { --bg:#f7ece8; --surface:#fffaf7; --surface2:#fbefe9; --line:#ecd8d0; --text:#3a2429; --muted:#8f6f75; --accent:#c9506a; --accent-text:#a8344e; --ink:#ffffff; --glow1:rgba(226,120,140,.24); --glow2:rgba(255,190,150,.28); --shadow:0 10px 30px rgba(150,80,80,.12); --display:"Songti SC","Noto Serif SC","STSong",serif; --track:1px; }
+  html[data-theme=cream] { --bg:#fbf1d9; --surface:#fffaec; --surface2:#fff3d2; --line:#efdfb4; --text:#33291a; --muted:#85795a; --accent:#ee6c3a; --accent-text:#c2491a; --ink:#ffffff; --glow1:rgba(255,170,60,.26); --glow2:rgba(110,200,180,.20); --shadow:0 10px 30px rgba(160,120,40,.14); --track:1px; }
+  html[data-theme=sage]  { --bg:#e9f0e5; --surface:#f8fbf6; --surface2:#eef4ea; --line:#d3e0cc; --text:#22322a; --muted:#66796d; --accent:#3d8c68; --accent-text:#2d7352; --ink:#ffffff; --glow1:rgba(110,190,150,.26); --glow2:rgba(200,230,170,.32); --shadow:0 10px 30px rgba(60,100,80,.12); --track:1px; }
+
+  html { background: var(--bg); transition: --bg .7s, --surface .7s, --surface2 .7s, --line .7s, --text .7s, --muted .7s, --accent .7s, --accent-text .7s, --ink .7s, --glow1 .7s, --glow2 .7s; }
+  @media (prefers-reduced-motion: reduce) { html { transition: none; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; color: var(--text); font-family: -apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; }
+  body::before { content: ""; position: fixed; inset: 0; z-index: -1;
+    background: radial-gradient(900px 620px at 88% -8%, var(--glow1), transparent 62%), radial-gradient(760px 540px at -8% 112%, var(--glow2), transparent 62%); }
+  body::after { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .07; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  .topbar { display: flex; align-items: center; gap: 22px; padding: 14px 28px; border-bottom: 1px solid var(--line); backdrop-filter: blur(8px); }
+  .brand { font-family: var(--display); font-size: 19px; font-weight: 700; letter-spacing: 3px; display: flex; align-items: center; gap: 10px; }
+  .brand i { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 14px var(--accent); }
+  .tabs { display: flex; gap: 3px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .tabs button { background: none; border: 0; padding: 6px 16px; border-radius: 8px; font-size: 14px; color: var(--muted); }
+  .tabs button[aria-selected=true] { background: var(--accent); color: var(--ink); font-weight: 600; }
+  .search { flex: 1; max-width: 400px; margin-left: auto; }
+  .search input { width: 100%; background: var(--surface); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 9px 14px; font: inherit; font-size: 14px; }
+  .search input::placeholder { color: var(--muted); }
+  .dots { display: flex; gap: 12px; font-size: 12px; color: var(--muted); }
+  .dots span::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; background: #55b36b; }
+  .dots span.off::before { background: #e0605a; }
+
+  .layout { display: grid; grid-template-columns: minmax(0,1fr) 400px; gap: 24px; padding: 22px 28px 40px; }
+  .cal-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 14px; }
+  .cal-head h2 { margin: 0; font-family: var(--display); font-size: 32px; letter-spacing: var(--track); }
+  .cal-head h2 small { font-size: 15px; color: var(--muted); font-weight: 400; margin-left: 10px; }
+  .nav { display: flex; gap: 6px; }
+  .nav button { background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 7px 13px; font-size: 14px; }
+  .nav button:hover:not(:disabled) { border-color: var(--accent); }
+  .nav button:disabled { opacity: .35; cursor: default; }
+
+  .themebar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; margin-bottom: 14px; }
+  .themebar p { margin: 0; font-size: 13px; color: var(--muted); flex: 1; min-width: 220px; }
+  .themebar p b { color: var(--accent-text); font-weight: 600; }
+  .sw { display: flex; align-items: center; gap: 7px; }
+  .sw .auto { background: var(--surface2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 12px; }
+  .sw .auto[aria-pressed=true] { background: var(--accent); color: var(--ink); border-color: var(--accent); font-weight: 600; }
+  .sw .dot { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); padding: 0; }
+  .sw .dot[aria-pressed=true] { box-shadow: 0 0 0 2px var(--accent-text); }
+  .sw .dot:hover { transform: scale(1.12); }
+
+  .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 14px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; }
+  .stat span { font-size: 12px; color: var(--muted); }
+  .stat b { display: block; font-family: var(--display); font-size: 24px; margin-top: 2px; }
+  .stat b em { font-style: normal; color: var(--accent-text); }
+
+  .grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 8px; }
+  .dow { text-align: center; font-size: 12px; color: var(--muted); padding-bottom: 2px; }
+  .day { position: relative; aspect-ratio: 1/1.15; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px; text-align: left; overflow: hidden; display: flex; flex-direction: column; }
+  .day.blank { visibility: hidden; }
+  .day:hover { border-color: var(--accent); }
+  .day .n { position: relative; z-index: 2; font-size: 13px; color: var(--muted); }
+  .day.today .n { background: var(--accent); color: var(--ink); width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; margin: -2px 0 0 -2px; }
+  .day.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+  .day.has .n { color: #fff; text-shadow: 0 1px 5px rgba(0,0,0,.7); }
+  .day.has.today .n { color: var(--ink); text-shadow: none; }
+  .day .poster { position: absolute; inset: 0; }
+  .day .poster::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,0) 38%, rgba(0,0,0,.8)); }
+  .day .cap { position: relative; z-index: 2; margin-top: auto; color: #fff; font-size: 12px; font-weight: 600; line-height: 1.25; text-shadow: 0 1px 6px rgba(0,0,0,.8); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .day .more { position: absolute; top: 7px; right: 7px; z-index: 2; background: var(--accent); color: var(--ink); font-size: 11px; font-weight: 700; border-radius: 9px; padding: 1px 7px; }
+
+  .side { display: flex; flex-direction: column; gap: 16px; align-self: start; position: sticky; top: 18px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
+  .day-head { padding: 18px 20px 6px; }
+  .day-head .date { font-size: 13px; color: var(--muted); }
+  .day-head h3 { margin: 2px 0 0; font-family: var(--display); font-size: 22px; }
+  .movie { display: grid; grid-template-columns: 84px 1fr; gap: 14px; padding: 14px 20px; border-top: 1px solid var(--line); }
+  .cover { width: 84px; aspect-ratio: 2/3; border-radius: 8px; display: flex; align-items: flex-end; padding: 6px; color: #fff; font-size: 11px; font-weight: 700; line-height: 1.2; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+  .movie h4 { margin: 0; font-family: var(--display); font-size: 16px; }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .stars { color: var(--accent-text); letter-spacing: 2px; margin-top: 6px; font-size: 14px; }
+  .note { font-size: 13px; line-height: 1.6; margin: 6px 0 0; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .tags span { font-size: 11px; padding: 2px 9px; border-radius: 999px; background: var(--surface2); border: 1px solid var(--line); color: var(--muted); }
+  .empty { padding: 8px 20px 18px; color: var(--muted); font-size: 13px; }
+  .add { padding: 12px 20px 18px; border-top: 1px solid var(--line); }
+  .btn { background: var(--accent); color: var(--ink); border: 0; border-radius: 9px; padding: 8px 14px; font-size: 13px; font-weight: 600; }
+  .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); font-weight: 400; }
+
+  .chat-title { padding: 14px 18px 0; font-family: var(--display); font-weight: 700; }
+  .chat-title small { color: var(--muted); font-weight: 400; margin-left: 8px; font-size: 12px; }
+  .msgs { display: grid; gap: 10px; padding: 12px 18px; max-height: 230px; overflow-y: auto; }
+  .m { max-width: 86%; padding: 9px 13px; border-radius: 14px; font-size: 13px; line-height: 1.6; }
+  .m.a { background: var(--surface2); border: 1px solid var(--line); border-bottom-left-radius: 4px; justify-self: start; }
+  .m.u { background: var(--accent); color: var(--ink); border-bottom-right-radius: 4px; justify-self: end; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 18px 8px; }
+  .chips button { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 3px 11px; font-size: 12px; }
+  .chips button:hover { color: var(--text); border-color: var(--accent); }
+  .composer { display: flex; gap: 8px; padding: 0 18px 16px; }
+  .composer input { flex: 1; background: var(--surface2); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 9px 12px; font: inherit; font-size: 13px; }
+
+  .list { display: none; grid-template-columns: repeat(auto-fill,minmax(130px,1fr)); gap: 14px; align-content: start; }
+  .list button { background: none; border: 0; padding: 0; text-align: left; }
+  .list .cover { width: 100%; height: auto; }
+  .list .t { font-size: 13px; font-weight: 600; margin-top: 6px; }
+  .list .s { font-size: 11px; color: var(--muted); }
+  body[data-view=list] .calview { display: none; }
+  body[data-view=list] .list { display: grid; }
+
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; padding: 16px; } .side { position: static; } .dots { display: none; } .topbar { padding: 12px 16px; flex-wrap: wrap; } }
+</style>
+</head>
+<body data-view="cal">
+<header class="topbar">
+  <div class="brand"><i></i>电影日记</div>
+  <div class="tabs" role="tablist" aria-label="视图">
+    <button role="tab" aria-selected="true" data-view="cal">日历</button>
+    <button role="tab" aria-selected="false" data-view="list">片单</button>
+  </div>
+  <div class="search"><label class="sr-only" for="q">搜索电影</label><input id="q" type="search" placeholder="搜索电影，记下今天看的这一部" autocomplete="off"></div>
+  <div class="dots" role="status"><span>LLM</span><span>生图</span><span>TMDB</span><span class="off">搜索</span></div>
+</header>
+
+<main class="layout">
+  <section class="calview" aria-label="观影日历">
+    <div class="cal-head">
+      <h2 id="title"></h2>
+      <div class="nav">
+        <button id="prev" aria-label="上个月">‹</button>
+        <button id="today">今天</button>
+        <button id="next" aria-label="下个月">›</button>
+      </div>
+    </div>
+    <div class="themebar">
+      <p id="why"></p>
+      <div class="sw" id="sw" role="group" aria-label="配色主题"></div>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="grid" id="grid"></div>
+  </section>
+  <section class="list" id="list" aria-label="全部电影"></section>
+
+  <aside class="side">
+    <div class="card" id="detail"></div>
+    <div class="card">
+      <div class="chat-title">和日记伙伴聊聊<small>全局对话</small></div>
+      <div class="msgs" id="msgs"></div>
+      <div class="chips"><button type="button">这个月我的口味有什么特点？</button><button type="button">按心情推荐下一部</button></div>
+      <form class="composer" onsubmit="return false"><label class="sr-only" for="ci">输入消息</label><input id="ci" placeholder="说说你的感受，或者问我点什么"><button class="btn">发送</button></form>
+    </div>
+  </aside>
+</main>
+
+<script>
+"use strict";
+const TODAY = "2025-11-09";
+const THEMES = {
+  midnight: { name: "午夜胶片", hint: "剧情 · 默认", bg: "#101116", ac: "#e0a458" },
+  fog:      { name: "冷雾",     hint: "悬疑 / 犯罪 / 惊悚", bg: "#0d1315", ac: "#5cc4c0" },
+  neon:     { name: "霓虹",     hint: "科幻 / 奇幻", bg: "#0a0a1c", ac: "#8b7bff" },
+  blood:    { name: "暗红",     hint: "恐怖", bg: "#110808", ac: "#e0454b" },
+  olive:    { name: "军绿",     hint: "战争 / 历史 / 传记", bg: "#12150e", ac: "#b4c46a" },
+  rose:     { name: "蔷薇",     hint: "爱情 / 文艺（浅色）", bg: "#f7ece8", ac: "#c9506a" },
+  cream:    { name: "奶油",     hint: "喜剧 / 动画（浅色）", bg: "#fbf1d9", ac: "#ee6c3a" },
+  sage:     { name: "鼠尾草",   hint: "治愈 / 纪录 / 家庭（浅色）", bg: "#e9f0e5", ac: "#3d8c68" },
+};
+const GENRE_THEME = {
+  剧情: "midnight", 悬疑: "fog", 犯罪: "fog", 惊悚: "fog", 科幻: "neon", 奇幻: "neon", 恐怖: "horror",
+  战争: "olive", 历史: "olive", 传记: "olive", 爱情: "rose", 文艺: "rose", 喜剧: "cream", 动画: "cream",
+  治愈: "sage", 纪录: "sage", 家庭: "sage",
+};
+GENRE_THEME["恐怖"] = "blood";
+
+// [date, title, year, genres, rating, note, tags]
+const RAW = [
+  ["2025-04-06","肖申克的救赎",1994,"剧情",5,"第三次看，放风那场还是红了眼。","经典,希望"],
+  ["2025-04-19","海上钢琴师",1998,"剧情/音乐",4,"他选择留在船上，我想了很久。","音乐,遗憾"],
+  ["2025-04-27","绿皮书",2018,"剧情/喜剧",4,"公路片的温度刚刚好。","友情,公路"],
+  ["2025-05-03","辛德勒的名单",1993,"历史/战争",5,"黑白里那一抹红，看完很久说不出话。","黑白,沉重"],
+  ["2025-05-11","拯救大兵瑞恩",1998,"战争",4,"开场二十分钟，是我看过最真实的登陆。","战争,群像"],
+  ["2025-05-18","一九四二",2012,"历史",3,"沉，但值得被记住。","国产,灾难"],
+  ["2025-05-25","敦刻尔克",2017,"战争/历史",4,"三条时间线，配乐一直在催命。","诺兰,配乐"],
+  ["2025-06-01","小森林 夏秋篇",2014,"治愈",4,"想去乡下做一顿饭。","美食,日常"],
+  ["2025-06-08","海洋",2009,"纪录",4,"安静地看了一个小时的蓝。","纪录片,自然"],
+  ["2025-06-15","海蒂和爷爷",2015,"家庭/治愈",4,"山里的风好像能吹出屏幕。","家庭,自然"],
+  ["2025-06-28","小偷家族",2018,"家庭/剧情",5,"越温柔越难受。","是枝裕和,家庭"],
+  ["2025-07-04","情书",1995,"爱情",5,"一句「你好吗」，我忍了一整个夏天。","初恋,日本"],
+  ["2025-07-12","花样年华",2000,"爱情/文艺",5,"旗袍、走廊、配乐，全是留白。","王家卫,留白"],
+  ["2025-07-20","爱在黎明破晓前",1995,"爱情",4,"走了一夜的路，说了一夜的话。","对话,维也纳"],
+  ["2025-07-26","怦然心动",2010,"爱情/青春",4,"两个人看同一件事，结果不同。","青春,成长"],
+  ["2025-08-02","疯狂动物城",2016,"动画/喜剧",5,"兔子警官太让人想拥抱。","动画,职场"],
+  ["2025-08-09","功夫",2004,"喜剧/动作",4,"包租婆那一嗓子永远好笑。","周星驰,港片"],
+  ["2025-08-16","三傻大闹宝莱坞",2009,"喜剧/剧情",5,"笑完又有点想哭。","印度,成长"],
+  ["2025-08-23","寻梦环游记",2017,"动画/家庭",5,"亡灵节那首歌，我在电影院哭到不行。","皮克斯,亲情"],
+  ["2025-08-30","憨豆先生的假期",2007,"喜剧",3,"没有台词也能笑。","憨豆,公路"],
+  ["2025-09-05","星际穿越",2014,"科幻",5,"五维空间那段，我愿意再看一遍。","诺兰,亲情"],
+  ["2025-09-13","降临",2016,"科幻",5,"语言真的会改变时间观。","语言,时间"],
+  ["2025-09-20","银翼杀手2049",2017,"科幻",4,"画面是一幅一幅的油画。","赛博朋克,视觉"],
+  ["2025-09-27","盗梦空间",2010,"科幻/悬疑",4,"陀螺停没停，已经不重要。","梦境,诺兰"],
+  ["2025-10-04","闪灵",1980,"恐怖",4,"走廊那一幕，我关了灯就后悔。","库布里克,经典"],
+  ["2025-10-12","遗传厄运",2018,"恐怖",4,"后半段彻底失控。","家庭,压抑"],
+  ["2025-10-19","午夜凶铃",1998,"恐怖",3,"电视机前至今不敢坐太近。","日式恐怖,经典"],
+  ["2025-10-31","寂静之地",2018,"恐怖/科幻",4,"全程憋气，连爆米花都不敢嚼。","无声,生存"],
+  ["2025-11-01","杀人回忆",2003,"犯罪/悬疑",5,"结尾那个眼神，直接盯进了现实。","奉俊昊,悬案"],
+  ["2025-11-02","七宗罪",1995,"悬疑/犯罪",5,"盒子里是什么，一直记着。","芬奇,压抑"],
+  ["2025-11-02","致命魔术",2006,"悬疑/科幻",4,"第二遍才看懂每个细节。","诺兰,魔术"],
+  ["2025-11-06","消失的爱人",2014,"悬疑",4,"看完对婚姻有点怀疑。","芬奇,反转"],
+  ["2025-11-08","看不见的客人",2016,"悬疑",4,"反转一层套一层。","西班牙,反转"],
+];
+const MOVIES = RAW.map(([date, title, year, g, rating, note, tags]) =>
+  ({ date, title, year, genres: g.split("/"), rating, note, tags: tags.split(",") }));
+
+const $ = (id) => document.getElementById(id);
+const pad = (n) => String(n).padStart(2, "0");
+const dkey = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
+const stars = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+function cover(t) {
+  let h = 0; for (const c of t) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `linear-gradient(160deg,hsl(${h} 50% 42%),hsl(${(h + 50) % 360} 55% 18%))`;
+}
+
+const params = new URLSearchParams(location.hash.slice(1));
+const state = {
+  y: 2025, m: params.has("m") ? Number(params.get("m")) : 10,
+  mode: params.get("t") || "auto", sel: null,
+};
+
+// Pick a theme from the movies of the viewed month, weighting by rating.
+function autoTheme(movies) {
+  if (!movies.length) return { key: "midnight", reason: "这个月还没有记录，先用默认的「午夜胶片」。" };
+  const score = {}, count = {}, labels = {};
+  for (const mv of movies) {
+    const hit = [...new Set(mv.genres.map((g) => GENRE_THEME[g]).filter(Boolean))];
+    if (!hit.length) continue;
+    const w = (0.7 + 0.1 * mv.rating) / hit.length;
+    for (const k of hit) {
+      score[k] = (score[k] || 0) + w; count[k] = (count[k] || 0) + 1;
+      (labels[k] ||= new Set());
+      mv.genres.filter((g) => GENRE_THEME[g] === k).forEach((g) => labels[k].add(g));
+    }
+  }
+  const key = Object.keys(score).sort((a, b) => score[b] - score[a])[0] || "midnight";
+  const tag = [...(labels[key] || [])].slice(0, 2).join(" / ") || "剧情";
+  return { key, reason: `自动配色：本月看了 ${movies.length} 部，其中 ${count[key] || 0} 部偏「${tag}」，所以用「${THEMES[key].name}」。` };
+}
+
+function render() {
+  const { y, m } = state;
+  const prefix = `${y}-${pad(m + 1)}`;
+  const monthMovies = MOVIES.filter((mv) => mv.date.startsWith(prefix));
+  const auto = autoTheme(monthMovies);
+  const key = state.mode === "auto" ? auto.key : state.mode;
+  document.documentElement.dataset.theme = key;
+
+  $("title").innerHTML = `${m + 1}月<small>${y}</small>`;
+  $("prev").disabled = m <= 3;
+  $("next").disabled = m >= 10;
+  $("why").innerHTML = state.mode === "auto"
+    ? auto.reason.replace(/「(.+?)」/g, "<b>「$1」</b>")
+    : `已手动锁定「<b>${THEMES[key].name}</b>」。点「自动」会按每月观影类型换色。`;
+
+  const sw = $("sw");
+  sw.replaceChildren();
+  const autoBtn = document.createElement("button");
+  autoBtn.className = "auto"; autoBtn.textContent = "自动";
+  autoBtn.setAttribute("aria-pressed", String(state.mode === "auto"));
+  autoBtn.onclick = () => { state.mode = "auto"; render(); };
+  sw.append(autoBtn);
+  for (const [k, t] of Object.entries(THEMES)) {
+    const b = document.createElement("button");
+    b.className = "dot"; b.title = `${t.name} · ${t.hint}`;
+    b.setAttribute("aria-label", `${t.name}，${t.hint}`);
+    b.setAttribute("aria-pressed", String(state.mode === k));
+    b.style.background = `linear-gradient(135deg,${t.bg} 50%,${t.ac} 50%)`;
+    b.onclick = () => { state.mode = k; render(); };
+    sw.append(b);
+  }
+
+  const avg = monthMovies.length ? (monthMovies.reduce((s, x) => s + x.rating, 0) / monthMovies.length).toFixed(1) : "–";
+  $("stats").innerHTML =
+    `<div class="stat"><span>本月观影</span><b>${monthMovies.length}<em> 部</em></b></div>` +
+    `<div class="stat"><span>平均评分</span><b>${avg}<em> ★</em></b></div>` +
+    `<div class="stat"><span>本月色调</span><b>${THEMES[auto.key].name}</b></div>`;
+
+  const byDate = new Map();
+  for (const mv of monthMovies) (byDate.get(mv.date) || byDate.set(mv.date, []).get(mv.date)).push(mv);
+  if (!state.sel || !state.sel.startsWith(prefix)) {
+    const days = [...byDate.keys()].sort();
+    state.sel = days.length ? days[days.length - 1] : `${prefix}-01`;
+  }
+
+  const grid = $("grid");
+  grid.replaceChildren();
+  for (const w of "一二三四五六日") { const d = document.createElement("div"); d.className = "dow"; d.textContent = w; grid.append(d); }
+  const first = (new Date(y, m, 1).getDay() + 6) % 7;
+  const total = new Date(y, m + 1, 0).getDate();
+  for (let i = 0; i < first; i++) { const b = document.createElement("div"); b.className = "day blank"; grid.append(b); }
+  for (let d = 1; d <= total; d++) {
+    const k = dkey(y, m, d), list = byDate.get(k) || [];
+    const b = document.createElement("button");
+    b.className = "day" + (list.length ? " has" : "") + (k === TODAY ? " today" : "") + (k === state.sel ? " sel" : "");
+    b.setAttribute("aria-label", `${m + 1}月${d}日` + (list.length ? `，看了${list.map((x) => `《${x.title}》`).join("、")}` : "，没有记录"));
+    b.setAttribute("aria-pressed", String(k === state.sel));
+    b.innerHTML = (list.length ? `<div class="poster" style="background:${cover(list[0].title)}"></div>` : "") +
+      `<span class="n">${d}</span>` +
+      (list.length > 1 ? `<span class="more">×${list.length}</span>` : "") +
+      (list.length ? `<span class="cap">${list[0].title}</span>` : "");
+    b.onclick = () => { state.sel = k; render(); };
+    grid.append(b);
+  }
+  renderDetail(byDate.get(state.sel) || []);
+
+  $("msgs").innerHTML =
+    `<div class="m a">这个月你看了 ${monthMovies.length} 部，整体是「${THEMES[auto.key].name}」的氛围。想先聊哪一部？</div>` +
+    `<div class="m u">最近好像总在看让人心里发紧的片子。</div>` +
+    `<div class="m a">评分最高的都带点压抑感，但结尾你都给了好评，说明你吃「有余味」的叙事。</div>`;
+
+  $("list").replaceChildren(...[...MOVIES].sort((a, b) => b.date.localeCompare(a.date)).map((mv) => {
+    const b = document.createElement("button");
+    b.innerHTML = `<div class="cover" style="background:${cover(mv.title)}">${mv.title}</div><div class="t">${mv.title}</div><div class="s">${mv.date.slice(5)} · ${stars(mv.rating)}</div>`;
+    b.onclick = () => { state.y = 2025; state.m = Number(mv.date.slice(5, 7)) - 1; state.sel = mv.date; document.body.dataset.view = "cal"; syncTabs("cal"); render(); };
+    return b;
+  }));
+}
+
+function renderDetail(list) {
+  const [y, m, d] = state.sel.split("-").map(Number);
+  const wd = "日一二三四五六"[new Date(y, m - 1, d).getDay()];
+  let h = `<div class="day-head"><div class="date">${m}月${d}日 周${wd}</div><h3>${list.length ? `看了 ${list.length} 部` : "这天没有记录"}</h3></div>`;
+  if (!list.length) h += `<p class="empty">想补记这天看过的电影，可以从这里开始。</p>`;
+  for (const mv of list) {
+    h += `<div class="movie"><div class="cover" style="background:${cover(mv.title)}">${mv.title}</div><div>` +
+      `<h4>${mv.title}</h4><div class="meta">${mv.year} · ${mv.genres.join(" / ")}</div>` +
+      `<div class="stars" aria-label="${mv.rating} 星">${stars(mv.rating)}</div><p class="note">${mv.note}</p>` +
+      `<div class="tags">${mv.tags.map((t) => `<span>${t}</span>`).join("")}</div></div></div>`;
+  }
+  h += `<div class="add"><button class="btn">+ 记一部</button> <button class="btn ghost">聊聊这天</button></div>`;
+  $("detail").innerHTML = h;
+}
+
+function syncTabs(v) { document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-selected", String(x.dataset.view === v))); }
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => { document.body.dataset.view = b.dataset.view; syncTabs(b.dataset.view); }));
+$("prev").onclick = () => { state.m = Math.max(3, state.m - 1); render(); };
+$("next").onclick = () => { state.m = Math.min(10, state.m + 1); state.sel = null; render(); };
+$("today").onclick = () => { state.m = 10; state.sel = TODAY; render(); };
+$("prev").addEventListener("click", () => { state.sel = null; });
+render();
+</script>
+</body>
+</html>
