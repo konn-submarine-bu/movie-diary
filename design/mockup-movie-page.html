@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="midnight">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>电影独立页 · 设计稿 v2</title>
+<style>
+  :root { --bg:#101116; --text:#ece9e2; --muted:#8d909b; --accent:#e0a458; --accent-text:#e0a458; --glow1:rgba(224,164,88,.2); --glow2:rgba(120,90,200,.14); --h:152; --serif:"Songti SC","Noto Serif SC","STSong",serif; --sans:-apple-system,"PingFang SC","Hiragino Sans GB",sans-serif; }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); color: var(--text); }
+  body { margin:0; min-height:100vh; font-family:var(--sans); overflow-x:hidden; }
+  button { font:inherit; color:inherit; cursor:pointer; background:none; border:0; padding:0; }
+  button:focus-visible, textarea:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:8px; }
+  ::-webkit-scrollbar { width:0; height:0; }
+
+  /* ---- atmosphere: one continuous field, no panels ---- */
+  .aurora { position:fixed; inset:0; pointer-events:none; overflow:hidden; }
+  .aurora i { position:absolute; border-radius:50%; filter:blur(50px); will-change:transform; }
+  .aurora i:nth-child(1) { left:-14vmax; top:-20vmax; width:62vmax; height:62vmax; background:radial-gradient(circle,var(--glow1),transparent 66%); animation:d1 28s ease-in-out infinite alternate; }
+  .aurora i:nth-child(2) { right:-18vmax; bottom:-24vmax; width:64vmax; height:64vmax; background:radial-gradient(circle,var(--glow2),transparent 66%); animation:d2 34s ease-in-out infinite alternate; }
+  .aurora i:nth-child(3) { right:6vmax; top:10vmax; width:46vmax; height:46vmax; background:radial-gradient(circle,hsl(var(--h) 65% 45% / .20),transparent 66%); animation:d3 40s ease-in-out infinite alternate; }
+  @keyframes d1 { to { transform:translate(14vmax,10vmax) scale(1.15); } }
+  @keyframes d2 { to { transform:translate(-12vmax,-9vmax) scale(1.2); } }
+  @keyframes d3 { to { transform:translate(-18vmax,12vmax) scale(.85); } }
+  .cursor { position:fixed; left:0; top:0; width:520px; height:520px; margin:-260px 0 0 -260px; border-radius:50%; pointer-events:none; background:radial-gradient(circle,var(--glow1),transparent 66%); mix-blend-mode:screen; opacity:.5; transition:transform .5s cubic-bezier(.2,.7,.2,1); }
+  .vig { position:fixed; inset:0; pointer-events:none; background:radial-gradient(ellipse at 50% 45%,transparent 50%,rgba(0,0,0,.5) 100%); }
+
+  .page { position:relative; z-index:1; height:100vh; padding:0 clamp(20px,3.4vw,56px) 24px; display:flex; flex-direction:column; }
+
+  /* ---- top: collapsed calendar ---- */
+  .top { display:flex; align-items:center; gap:26px; padding:22px 0 12px; }
+  .back { display:flex; align-items:center; gap:10px; font-size:14px; letter-spacing:.14em; color:var(--muted); transition:color .3s; }
+  .back:hover { color:var(--accent-text); }
+  .back b { font-family:var(--serif); font-size:24px; font-weight:400; color:var(--accent-text); }
+  .strip { display:flex; align-items:center; gap:12px; }
+  .strip .m { font-size:12px; letter-spacing:.3em; color:var(--muted); margin-right:4px; }
+  .mini { position:relative; width:34px; height:34px; border-radius:50%; display:grid; place-items:center; font-size:11px; color:#fff; font-weight:600; background:linear-gradient(160deg,hsl(var(--h) 58% 50%),hsl(calc(var(--h) + 50) 62% 20%)); opacity:.5; transition:opacity .3s, transform .3s; text-shadow:0 1px 6px rgba(0,0,0,.6); }
+  .mini:hover { opacity:1; transform:scale(1.12); }
+  .mini.cur { opacity:1; transform:scale(1.12); box-shadow:0 0 26px hsl(var(--h) 85% 55% / .7), 0 0 0 5px hsl(var(--h) 85% 55% / .14); }
+  .mini .dot { position:absolute; right:-1px; bottom:-1px; width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent); }
+  .sp { flex:1; }
+  .saved { font-size:12px; color:var(--muted); letter-spacing:.1em; display:flex; align-items:center; gap:8px; }
+  .saved i { width:6px; height:6px; border-radius:50%; background:#6fcf97; box-shadow:0 0 8px #6fcf97; }
+
+  /* ---- three columns, separated by space and light only ---- */
+  .cols { flex:1; min-height:0; display:grid; grid-template-columns:minmax(250px,.72fr) minmax(430px,1.3fr) minmax(340px,1.18fr); gap:clamp(18px,2.6vw,44px); padding-top:10px; }
+  .col { min-width:0; min-height:0; display:flex; flex-direction:column; }
+  .h { display:flex; align-items:baseline; justify-content:space-between; margin:0 0 14px; font-size:11.5px; letter-spacing:.36em; color:var(--muted); }
+  .h em { font-style:normal; letter-spacing:.08em; font-size:12px; opacity:.75; }
+
+  /* ---- 1 film ---- */
+  .film { overflow-y:auto; padding:6px 6px 36px 2px; -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 40px),transparent); mask-image:linear-gradient(to bottom,#000 calc(100% - 40px),transparent); }
+  .cover { flex:none; width:100%; max-width:176px; aspect-ratio:2/3; border-radius:12px; padding:14px; display:flex; align-items:flex-end; font-family:var(--serif); font-weight:700; font-size:22px; color:#fff; text-shadow:0 2px 10px rgba(0,0,0,.5);
+    background:linear-gradient(165deg,#c8b29b,#7d5a4a 55%,#2f1d1e); box-shadow:0 40px 80px -24px hsl(var(--h) 85% 50% / .7), 0 0 70px hsl(var(--h) 85% 50% / .25); }
+  .ftitle { margin:20px 0 0; font-family:var(--serif); font-size:clamp(28px,2.6vw,40px); font-weight:700; line-height:1.1; text-shadow:0 0 34px color-mix(in srgb,var(--accent) 45%,transparent); }
+  .en { margin:6px 0 0; font-size:13px; color:var(--muted); letter-spacing:.06em; font-style:italic; }
+  .meta { margin:12px 0 0; font-size:13px; color:var(--muted); letter-spacing:.06em; line-height:1.9; }
+  .meta b { color:var(--text); font-weight:500; }
+  .score { display:flex; gap:20px; margin:14px 0 0; font-size:11.5px; color:var(--muted); letter-spacing:.08em; }
+  .score b { display:block; font-family:var(--serif); font-size:22px; color:var(--text); font-weight:600; letter-spacing:0; }
+  .kw { margin:16px 0 0; display:flex; flex-wrap:wrap; gap:8px; }
+  .kw span { padding:4px 12px; font-size:12px; letter-spacing:.1em; border-radius:99px; background:rgba(255,255,255,.055); color:var(--text); opacity:.9; }
+  .kw span::before { content:"#"; color:var(--accent-text); margin-right:2px; opacity:.8; }
+  .tabs { margin:26px 0 0; display:flex; gap:24px; font-size:14px; letter-spacing:.1em; }
+  .tabs button { color:var(--muted); transition:color .3s; }
+  .tabs button::after { content:""; display:block; width:5px; height:5px; margin:7px auto 0; border-radius:50%; background:var(--accent); box-shadow:0 0 10px var(--accent); opacity:0; transition:opacity .3s; }
+  .tabs button[aria-selected=true] { color:var(--accent-text); }
+  .tabs button[aria-selected=true]::after { opacity:1; }
+  .pane { padding-top:14px; font-size:13.5px; line-height:1.85; opacity:.94; }
+  .pane[hidden] { display:none; }
+  .web { padding:10px 0 14px; }
+  .web .src { display:flex; justify-content:space-between; font-size:11.5px; letter-spacing:.12em; color:var(--muted); margin-bottom:4px; }
+  .web .src a { color:var(--accent-text); text-decoration:none; opacity:.8; }
+  .web q { quotes:"“" "”"; font-family:var(--serif); font-size:14px; line-height:1.75; }
+  .sims { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .sim { text-align:left; }
+  .sim .p { aspect-ratio:2/3; border-radius:10px; margin-bottom:6px; background:linear-gradient(160deg,hsl(var(--sh) 40% 40%),hsl(calc(var(--sh) + 40) 45% 14%)); box-shadow:0 14px 30px -14px hsl(var(--sh) 70% 50% / .6); transition:transform .4s; }
+  .sim:hover .p { transform:translateY(-5px); }
+  .sim b { display:block; font-size:12.5px; font-weight:500; }
+  .sim span { font-size:11px; color:var(--muted); line-height:1.5; display:block; }
+
+  /* ---- 2 chat: no card, just a soft pool of light ---- */
+  .chat { position:relative; }
+  .chat::before { content:""; position:absolute; inset:-6% -8% -4%; pointer-events:none; background:radial-gradient(ellipse 70% 60% at 50% 45%,rgba(255,255,255,.045),transparent 72%); }
+  .chat > * { position:relative; }
+  .chat .h span b { color:var(--text); font-family:var(--serif); letter-spacing:.1em; font-size:15px; font-weight:600; }
+  .msgs { flex:1; min-height:0; overflow:auto; padding:22px 4px 22px; display:flex; flex-direction:column; gap:20px;
+    -webkit-mask-image:linear-gradient(to bottom,transparent,#000 26px,#000 calc(100% - 26px),transparent); mask-image:linear-gradient(to bottom,transparent,#000 26px,#000 calc(100% - 26px),transparent); }
+  .m { max-width:88%; font-size:15px; line-height:1.85; border-radius:22px; transition:background .4s, box-shadow .4s; }
+  .m.ai { font-family:var(--serif); }
+  .m.ai::before { content:"导演助手"; display:block; font-family:var(--sans); font-size:11px; letter-spacing:.3em; color:var(--accent-text); margin-bottom:4px; opacity:.85; }
+  .m.me { align-self:flex-end; padding:12px 18px; background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 20%,transparent),color-mix(in srgb,var(--accent) 7%,transparent)); border-radius:24px 24px 6px 24px; box-shadow:0 10px 36px -14px color-mix(in srgb,var(--accent) 50%,transparent); }
+  .m.hl { background:color-mix(in srgb,var(--accent) 16%,transparent); box-shadow:0 0 44px color-mix(in srgb,var(--accent) 45%,transparent); padding:8px 14px; margin:-8px -14px; }
+  .m.me.hl { padding:12px 18px; margin:0; background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 36%,transparent),color-mix(in srgb,var(--accent) 14%,transparent)); }
+  .asks { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .chip, .asks button, .helpers button, .words button { font-family:var(--sans); font-size:12.5px; padding:6px 14px; border-radius:99px; background:rgba(255,255,255,.06); color:var(--text); transition:background .25s, color .25s, box-shadow .25s; }
+  .chip:hover, .asks button:hover, .helpers button:hover, .words button:hover { background:color-mix(in srgb,var(--accent) 22%,transparent); color:var(--accent-text); box-shadow:0 0 22px -4px color-mix(in srgb,var(--accent) 60%,transparent); }
+
+  .compose { position:relative; padding-top:6px; }
+  .helpers { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center; }
+  .helpers .lab { font-size:11.5px; letter-spacing:.2em; color:var(--muted); margin-right:4px; }
+  .helpers button { padding:5px 13px; }
+  .box { position:relative; border-radius:26px; background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.03)); transition:box-shadow .4s, background .4s; }
+  .box:focus-within { background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.04)); box-shadow:0 0 70px -12px color-mix(in srgb,var(--accent) 45%,transparent), inset 0 0 0 1px color-mix(in srgb,var(--accent) 35%,transparent); }
+  .ghost, #inp { margin:0; width:100%; padding:16px 20px 6px; font:inherit; font-size:15px; line-height:1.85; font-family:var(--serif); white-space:pre-wrap; word-break:break-all; border:0; background:transparent; resize:none; min-height:96px; }
+  .ghost { position:absolute; inset:0; color:transparent; pointer-events:none; }
+  .ghost i { font-style:normal; color:var(--muted); opacity:.7; }
+  #inp { position:relative; color:var(--text); outline:0; display:block; }
+  .bar { display:flex; align-items:center; justify-content:space-between; padding:4px 12px 12px 20px; font-size:12px; color:var(--muted); letter-spacing:.06em; }
+  .bar kbd { font:inherit; font-size:11px; padding:1px 7px; border-radius:6px; background:rgba(255,255,255,.08); margin:0 3px; }
+  .send { padding:8px 22px; border-radius:99px; background:var(--accent); color:#1a1307; font-weight:600; font-size:13px; letter-spacing:.14em; box-shadow:0 0 30px -4px color-mix(in srgb,var(--accent) 70%,transparent); transition:filter .3s; }
+  .send:hover { filter:brightness(1.12); }
+  .sug { margin:0 0 12px; border-radius:24px; background:rgba(22,23,31,.78); backdrop-filter:blur(22px); box-shadow:0 30px 70px -16px rgba(0,0,0,.75), 0 0 50px -10px color-mix(in srgb,var(--accent) 30%,transparent); overflow:hidden; padding:6px; }
+  .sug[hidden] { display:none; }
+  .sug .sh { padding:8px 14px 6px; font-size:11px; letter-spacing:.26em; color:var(--muted); display:flex; justify-content:space-between; }
+  .sug > button[data-v] { display:block; width:100%; text-align:left; padding:10px 14px; border-radius:16px; font-family:var(--serif); font-size:14px; line-height:1.6; transition:background .2s; }
+  .sug > button[data-v]:hover, .sug > button.act { background:color-mix(in srgb,var(--accent) 16%,transparent); }
+  .sug button u { text-decoration:none; color:var(--muted); }
+  .sug button em { float:right; font-family:var(--sans); font-style:normal; font-size:11px; color:var(--accent-text); letter-spacing:.1em; opacity:.85; }
+  .words { display:flex; flex-wrap:wrap; gap:6px; padding:8px 12px 10px; }
+  .words .lab { width:100%; font-size:11px; letter-spacing:.26em; color:var(--muted); }
+  .words button { padding:3px 11px; }
+
+  /* ---- 3 impression sea ---- */
+  .sumcol { position:relative; }
+  .status { display:flex; align-items:center; gap:10px; font-size:12px; color:var(--muted); letter-spacing:.08em; margin:-4px 0 6px; min-height:22px; }
+  .status .spin { flex:none; width:12px; height:12px; border-radius:50%; border:2px solid rgba(255,255,255,.14); border-top-color:var(--accent-text); animation:sp 1s linear infinite; }
+  .status.done .spin { animation:none; border-color:#6fcf97; background:#6fcf97; box-shadow:0 0 10px #6fcf97; }
+  .status .again { margin-left:auto; font-size:11.5px; letter-spacing:.1em; color:var(--muted); opacity:.75; transition:color .3s, opacity .3s; }
+  .status .again:hover:not(:disabled) { color:var(--accent-text); opacity:1; }
+  .status .again:disabled { opacity:.3; cursor:default; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+
+  .seawrap { position:relative; flex:1; min-height:380px; }
+  .seabg { position:absolute; inset:-2% -6%; pointer-events:none; overflow:hidden;
+    background:radial-gradient(ellipse 80% 70% at 50% 42%,hsl(var(--h) 60% 42% / .20),transparent 72%), linear-gradient(to bottom,transparent 55%,hsl(var(--h) 60% 38% / .16));
+    -webkit-mask-image:radial-gradient(closest-side,#000 34%,transparent 100%); mask-image:radial-gradient(closest-side,#000 34%,transparent 100%); }
+  .wave { position:absolute; left:0; bottom:0; width:200%; height:26%; fill:hsl(var(--h) 65% 55% / .10); animation:wv 22s linear infinite; }
+  .wave.w2 { height:20%; fill:hsl(var(--h) 70% 60% / .09); animation-duration:34s; animation-direction:reverse; bottom:-2%; }
+  @keyframes wv { to { transform:translateX(-50%); } }
+  .dust { position:absolute; bottom:-12px; width:4px; height:4px; border-radius:50%; background:hsl(var(--h) 80% 80% / .6); box-shadow:0 0 10px hsl(var(--h) 85% 70% / .7); animation:rise linear infinite; opacity:0; }
+  @keyframes rise { 0% { transform:translate(0,0); opacity:0; } 12% { opacity:.8; } 100% { transform:translate(var(--dx),-80vh); opacity:0; } }
+  .sink { position:absolute; left:0; right:0; bottom:6px; text-align:center; font-size:10.5px; letter-spacing:.4em; color:var(--muted); opacity:.3; pointer-events:none; }
+
+  .bubbles { position:absolute; inset:0; }
+  .bub { position:absolute; left:0; top:0; width:calc(var(--r) * 2); height:calc(var(--r) * 2); cursor:grab; touch-action:none; user-select:none; will-change:transform; opacity:0; transition:opacity 1.2s; }
+  .bub.show { opacity:1; }
+  .bub.drag { cursor:grabbing; z-index:3; }
+  .bub .in { position:absolute; inset:0; border-radius:50%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:3px; padding:calc(var(--r) * .2);
+    --k:1;
+    background:radial-gradient(circle at 30% 22%,rgba(255,255,255,.34),rgba(255,255,255,0) 34%), radial-gradient(circle at 50% 56%,hsl(var(--bh) 70% 60% / calc(.06 * var(--k))) 38%,hsl(var(--bh) 85% 62% / calc(.30 * var(--k))) 100%);
+    box-shadow:inset 0 0 0 1px hsl(var(--bh) 80% 85% / .13), inset 0 -12px 32px hsl(var(--bh) 85% 60% / calc(.20 * var(--k))), 0 0 40px hsl(var(--bh) 90% 55% / calc(.20 * var(--k)));
+    backdrop-filter:blur(3px); transition:scale .8s cubic-bezier(.2,.7,.2,1), opacity .8s, filter .4s;
+    animation:bob 7s ease-in-out infinite, morph 12s ease-in-out infinite; animation-delay:var(--d), var(--d); }
+  .bub.ok .in, .bub.edit .in { --k:1.9; }
+  .bub.draft .in { animation:bob 7s ease-in-out infinite, morph 12s ease-in-out infinite, breathe 3.4s ease-in-out infinite; animation-delay:var(--d), var(--d), var(--d); }
+  .bub:hover .in, .bub.glow .in { filter:brightness(1.3) saturate(1.2); }
+  @keyframes bob { 50% { transform:scale(1.035); } }
+  @keyframes breathe { 50% { box-shadow:inset 0 0 0 1px hsl(var(--bh) 80% 85% / .28), inset 0 -12px 32px hsl(var(--bh) 85% 60% / .3), 0 0 60px hsl(var(--bh) 90% 55% / .38); } }
+  @keyframes morph { 0%,100% { border-radius:50%; } 33% { border-radius:53% 47% 46% 54% / 48% 54% 46% 52%; } 66% { border-radius:47% 53% 54% 46% / 53% 46% 54% 47%; } }
+  .bub small { font-size:10px; letter-spacing:.24em; color:hsl(var(--bh) 85% 82%); opacity:.9; text-indent:.24em; }
+  .bub span { font-family:var(--serif); font-size:14px; line-height:1.45; color:var(--text); text-shadow:0 1px 10px rgba(0,0,0,.45); }
+  .bub .bst { font-size:11px; letter-spacing:.12em; color:hsl(var(--bh) 90% 78%); text-shadow:0 0 10px hsl(var(--bh) 90% 60%); }
+  .bub .bst:empty { display:none; }
+  .k-one span { font-size:17px; font-weight:600; }
+  .k-word span { font-size:12.5px; }
+  .k-word small { display:none; }
+  .bub .dot { position:absolute; right:calc(var(--r) * .24); top:calc(var(--r) * .24); width:8px; height:8px; border-radius:50%; pointer-events:none; transition:background .3s; }
+  .bub.draft .dot { background:var(--accent); box-shadow:0 0 10px var(--accent); animation:blink 1.8s ease-in-out infinite; }
+  .bub.ok .dot { background:#6fcf97; box-shadow:0 0 10px #6fcf97; }
+  .bub.edit .dot { background:#8fb4ff; box-shadow:0 0 10px #8fb4ff; }
+  @keyframes blink { 50% { opacity:.25; } }
+  .bub.rej { pointer-events:none; }
+  .bub.rej .in { pointer-events:auto; scale:.34; opacity:.5; cursor:pointer; animation:bob 7s ease-in-out infinite; }
+  .bub.rej .in * { opacity:0; }
+  .bub.rej .in::after { content:"↺"; position:absolute; inset:0; display:grid; place-items:center; font-size:56px; color:var(--text); opacity:0; transition:opacity .3s; }
+  .bub.rej:hover .in::after { opacity:.9; }
+  .bub.rej .dot { display:none; }
+
+  .addb { position:absolute; right:4%; bottom:15%; width:52px; height:52px; border-radius:50%; display:grid; place-items:center; font-size:22px; font-weight:300; color:var(--muted);
+    background:radial-gradient(circle at 30% 24%,rgba(255,255,255,.14),rgba(255,255,255,.02) 60%); box-shadow:inset 0 0 0 1px rgba(255,255,255,.06), 0 0 30px -6px rgba(255,255,255,.14); animation:flt 8s ease-in-out infinite; transition:color .3s, box-shadow .3s; }
+  .addb:hover { color:var(--accent-text); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 40%,transparent), 0 0 40px -4px color-mix(in srgb,var(--accent) 60%,transparent); }
+  .addb small { position:absolute; top:100%; margin-top:4px; font-size:10.5px; letter-spacing:.2em; white-space:nowrap; opacity:.7; }
+  @keyframes flt { 50% { transform:translate(-6px,-10px); } }
+
+  .pop { position:absolute; z-index:6; width:276px; padding:18px 22px 12px; border-radius:30px; --bh:200;
+    background:radial-gradient(120% 110% at 15% 0%,hsl(var(--bh) 60% 42% / .34),rgba(18,19,26,.84) 62%); backdrop-filter:blur(22px);
+    box-shadow:0 30px 80px -20px rgba(0,0,0,.75), 0 0 60px hsl(var(--bh) 85% 55% / .20), inset 0 0 0 1px rgba(255,255,255,.07);
+    opacity:0; transform:translateY(8px) scale(.95); pointer-events:none; transition:opacity .25s, transform .4s cubic-bezier(.2,.7,.2,1); }
+  .pop.open { opacity:1; transform:none; pointer-events:auto; }
+  .pk { display:flex; justify-content:space-between; align-items:center; font-size:11px; letter-spacing:.3em; color:hsl(var(--bh) 85% 80%); margin-bottom:8px; }
+  .tg { font-style:normal; font-size:10.5px; letter-spacing:.1em; padding:2px 10px; border-radius:99px; }
+  .tg.draft { color:var(--accent-text); background:color-mix(in srgb,var(--accent) 16%,transparent); }
+  .tg.ok { color:#6fcf97; background:rgba(111,207,151,.14); }
+  .tg.edit { color:#8fb4ff; background:rgba(143,180,255,.14); }
+  .pstars { margin:0 0 4px; font-size:19px; letter-spacing:.2em; }
+  .pstars span { cursor:pointer; color:rgba(255,255,255,.2); transition:color .2s, text-shadow .2s; }
+  .pstars span.on { color:var(--accent-text); text-shadow:0 0 12px var(--accent); }
+  .pt { font-family:var(--serif); font-size:15px; line-height:1.8; outline:0; border-radius:10px; min-height:1.8em; }
+  .pt[contenteditable=true] { background:rgba(255,255,255,.07); padding:4px 10px; margin:0 -10px; box-shadow:0 0 30px -8px hsl(var(--bh) 85% 60% / .5); }
+  .ps { margin-top:8px; font-size:11.5px; color:var(--muted); letter-spacing:.06em; }
+  .ps button { color:var(--accent-text); opacity:.9; margin-left:8px; }
+  .ps button:hover { text-decoration:underline; }
+  .pa { display:flex; gap:4px; margin:12px -10px 0; font-size:12.5px; letter-spacing:.1em; }
+  .pa button { padding:5px 14px; border-radius:99px; color:var(--muted); transition:color .25s, background .25s; }
+  .pa .y:hover { color:#6fcf97; background:rgba(111,207,151,.12); } .pa .e:hover { color:#8fb4ff; background:rgba(143,180,255,.12); } .pa .n:hover { color:#ff8b8b; background:rgba(255,123,123,.12); }
+  .pa [hidden] { display:none; }
+
+  .legend { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:8px; font-size:11px; letter-spacing:.1em; color:var(--muted); }
+  .legend i { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:hsl(var(--bh) 85% 62%); box-shadow:0 0 8px hsl(var(--bh) 90% 60%); }
+  .hint { margin-top:6px; font-size:11px; letter-spacing:.08em; color:var(--muted); opacity:.65; }
+
+  .cal { margin-top:14px; display:flex; align-items:center; gap:16px; padding:6px 0 0; }
+  .cal .k { font-size:11px; letter-spacing:.3em; color:var(--accent-text); writing-mode:vertical-rl; opacity:.85; }
+  .cal .orb { flex:none; width:54px; height:54px; border-radius:50%; display:grid; place-items:center; font-size:15px; font-weight:600; text-shadow:0 1px 8px rgba(0,0,0,.6); background:linear-gradient(160deg,#c8b29b,#7d5a4a 55%,#2f1d1e); box-shadow:0 0 34px hsl(var(--h) 80% 55% / .55); }
+  .cal .tip { font-family:var(--serif); font-size:14px; line-height:1.7; padding:8px 16px; border-radius:20px; background:rgba(255,255,255,.06); transition:opacity .4s; }
+  .cal .tip.faint { opacity:.45; font-style:italic; }
+  .cal .tip small { display:block; font-family:var(--sans); font-size:11px; color:var(--muted); letter-spacing:.08em; }
+
+  @media (max-width:1180px) {
+    .page { height:auto; min-height:100vh; } .cols { grid-template-columns:1fr; } .strip { display:none; }
+    .film { overflow:visible; -webkit-mask-image:none; mask-image:none; } .chat { height:78vh; } .seawrap { min-height:520px; }
+  }
+  @media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body>
+<div class="aurora"><i></i><i></i><i></i></div>
+<div class="vig"></div>
+<div class="cursor" id="cursor"></div>
+
+<div class="page">
+
+  <!-- 顶部:日历收起,只留本月的小圆球 -->
+  <header class="top">
+    <button class="back" title="回到日历"><b>←</b> 回到日历</button>
+    <div class="strip" aria-label="本月观影,点击切换">
+      <span class="m">11 月</span>
+      <button class="mini" style="--h:20">7</button>
+      <button class="mini" style="--h:350">8</button>
+      <button class="mini" style="--h:42">9<i class="dot"></i></button>
+      <button class="mini cur" style="--h:152">10<i class="dot"></i></button>
+    </div>
+    <span class="sp"></span>
+    <span class="saved"><i></i>已自动保存</span>
+  </header>
+
+  <main class="cols">
+
+    <!-- ① 电影本身 -->
+    <section class="col film" aria-label="电影信息">
+      <p class="h"><span>THE FILM</span><em>11 月 10 日 · 周二</em></p>
+      <div class="cover">喜宴</div>
+      <h1 class="ftitle">喜宴</h1>
+      <p class="en">The Wedding Banquet</p>
+      <p class="meta"><b>1993</b> · 李安 导演 · 106 分钟 · 中国台湾 / 美国<br>喜剧 / 剧情 / 爱情<br>赵文瑄 · 郎雄 · 归亚蕾 · 金素梅</p>
+      <div class="score"><div><b>8.7</b>豆瓣</div><div><b>7.5</b>IMDb</div><div><b>95%</b>烂番茄</div></div>
+      <div class="kw"><span>出柜</span><span>家庭</span><span>婚姻</span><span>东西方文化冲突</span><span>喜剧外壳</span></div>
+
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-p="p1">网络评价</button>
+        <button role="tab" aria-selected="false" data-p="p2">相似电影</button>
+        <button role="tab" aria-selected="false" data-p="p3">简介</button>
+      </div>
+      <div class="pane" id="p1">
+        <p style="margin:0 0 4px;color:var(--muted);font-size:12px">互联网的主流看法:用喜剧的壳,装一个沉重的家庭问题。</p>
+        <div class="web"><div class="src"><span>豆瓣 · 影评</span><a href="#">原文 ↗</a></div><q>所有人都在演,只有父亲什么都知道。最动人的是那句没说出口的话。</q></div>
+        <div class="web"><div class="src"><span>Letterboxd</span><a href="#">原文 ↗</a></div><q>A comedy of manners that quietly breaks your heart in the last ten minutes.</q></div>
+        <div class="web"><div class="src"><span>影评人 · 长评</span><a href="#">原文 ↗</a></div><q>李安的「父亲三部曲」中最轻盈的一部,却把代际沉默拍得最重。</q></div>
+      </div>
+      <div class="pane" id="p2" hidden>
+        <div class="sims">
+          <button class="sim" style="--sh:200"><div class="p"></div><b>饮食男女</b><span>同导演 · 家庭餐桌</span></button>
+          <button class="sim" style="--sh:340"><div class="p"></div><b>春光乍泄</b><span>情感的另一种出口</span></button>
+          <button class="sim" style="--sh:90"><div class="p"></div><b>推手</b><span>父亲三部曲</span></button>
+        </div>
+      </div>
+      <div class="pane" id="p3" hidden>台北的同志房东为了应付父母催婚,与房客假结婚。父母远渡重洋赶来筹办婚宴,一场荒诞的戏越演越真。</div>
+    </section>
+
+    <!-- ② 与 agent 对话 -->
+    <section class="col chat" aria-label="对话">
+      <p class="h"><span><b>聊聊《喜宴》</b></span><em>共 6 轮 · 仅关于这部电影</em></p>
+      <div class="msgs" id="msgs">
+        <div class="m ai" data-id="a1">看完之后,哪个画面或者哪一刻最先浮现在你脑子里?不用组织语言,一个词也行。</div>
+        <div class="m me" data-id="u1">婚宴那场闹洞房,明明很好笑,我却有点难受。</div>
+        <div class="m ai" data-id="a2">好笑和难受同时发生,是这部片很准的地方。难受是替谁?替新娘、替伟同,还是替那对父母?
+          <div class="asks"><button>替父母</button><button>替伟同</button><button>说不清,都有</button></div></div>
+        <div class="m me" data-id="u2">替父亲吧。他全程什么都懂,却一句话都没拆穿。</div>
+        <div class="m ai" data-id="a3">「什么都懂,却不拆穿」,这个克制很有力量。你会把它归为温柔,还是一种无奈?</div>
+      </div>
+
+      <div class="compose">
+        <div class="sug" id="sug" hidden>
+          <div class="sh"><span>这样说可以吗?</span><span>↑↓ 选择 · Tab 采纳</span></div>
+          <button class="act" data-v="像一种说不出口的温柔,他选择装作不知道,把体面留给了所有人。"><u>温柔,</u>像一种说不出口的温柔,他选择装作不知道…<em>续写</em></button>
+          <button data-v="更像无奈。他不是看不懂,是不敢看懂,拆穿了这个家就散了。"><u>温柔,</u>更像无奈,他不是看不懂,是不敢看懂…<em>换个角度</em></button>
+          <button data-v="温柔和无奈本来就分不开,爱到最后常常只剩下沉默。"><u>温柔,</u>温柔和无奈本来就分不开…<em>更抒情</em></button>
+          <div class="words"><span class="lab">也许你想说的词</span>
+            <button>隐忍</button><button>体面</button><button>心照不宣</button><button>钝痛</button><button>酸涩的喜感</button><button>沉默的爱</button></div>
+        </div>
+        <div class="helpers">
+          <span class="lab">帮我表达</span>
+          <button data-help="我说不清,但大概是这种感觉:">说不清,你来猜</button>
+          <button data-help="如果用一个天气形容这部电影,它是">用天气 / 颜色比喻</button>
+          <button data-help="这部电影让我想到我自己的">联想到我的生活</button>
+          <button data-help="我想对其中一个角色说:">对角色说句话</button>
+        </div>
+        <div class="box">
+          <pre class="ghost" id="ghost" aria-hidden="true"></pre>
+          <textarea id="inp" rows="3" placeholder="说说你的感受。词不达意也没关系,写几个字,我来帮你补全…" aria-label="输入你的感受"></textarea>
+          <div class="bar"><span><kbd>Tab</kbd>采纳补全 <kbd>Esc</kbd>忽略 <kbd>⌘ ↵</kbd>发送</span><button class="send" id="send">发送</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ③ 印象之海 -->
+    <section class="col sumcol" aria-label="我的印象">
+      <p class="h"><span>IMPRESSION SEA · 印象之海</span><em>随对话浮现</em></p>
+      <div class="status" id="status"><i class="spin"></i><span id="stxt">正在根据最新一轮对话整理…</span><button class="again" id="again" disabled>模拟下一轮整理 ↻</button></div>
+
+      <div class="seawrap" id="seawrap">
+        <div class="seabg" id="seabg">
+          <svg class="wave" viewBox="0 0 1200 120" preserveAspectRatio="none"><path d="M0 60 Q150 20 300 60 T600 60 T900 60 T1200 60 V120 H0Z"/></svg>
+          <svg class="wave w2" viewBox="0 0 1200 120" preserveAspectRatio="none"><path d="M0 70 Q150 30 300 70 T600 70 T900 70 T1200 70 V120 H0Z"/></svg>
+          <div class="sink">沉 底 · 已 驳 回</div>
+        </div>
+        <div class="bubbles" id="bubbles"></div>
+        <button class="addb" id="addb" aria-label="补充一条我自己的印象">+<small>补充</small></button>
+        <div class="pop" id="pop" role="dialog" aria-label="印象详情"></div>
+      </div>
+
+      <div class="legend">
+        <span style="--bh:38"><i></i>一句话印象</span><span style="--bh:195"><i></i>感受</span><span style="--bh:345"><i></i>评价</span><span style="--bh:265"><i></i>灵感</span><span style="--bh:152"><i></i>印象词</span>
+      </div>
+      <p class="hint">点气泡查看和校准 · 拖动可以挪位置 · 驳回的会沉到海底,点一下放回来</p>
+
+      <div class="cal">
+        <span class="k">日历里</span>
+        <div class="orb">10</div>
+        <div class="tip faint" id="calText">还没有写下感受</div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // 氛围:光晕跟随鼠标
+  addEventListener('pointermove', e => { $('#cursor').style.transform = `translate(${e.clientX}px,${e.clientY}px)`; });
+
+  // 左栏页签
+  $$('.tabs button').forEach(b => b.onclick = () => {
+    $$('.tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
+    $$('.pane').forEach(p => p.hidden = p.id !== b.dataset.p);
+  });
+
+  /* ================= 对话输入补全 ================= */
+  const inp = $('#inp'), ghost = $('#ghost'), sug = $('#sug');
+  let cands = [], idx = 0;
+  function renderSug() {
+    const v = inp.value;
+    const show = v.trim().length > 0 && /温柔|无奈|说不清|难受/.test(v);
+    sug.hidden = !show;
+    cands = $$('#sug > button[data-v]');
+    if (!show) { ghost.innerHTML = ''; return; }
+    cands.forEach((c, i) => c.classList.toggle('act', i === idx));
+    ghost.innerHTML = '';
+    ghost.append(document.createTextNode(v));
+    const i = document.createElement('i'); i.textContent = cands[idx].dataset.v; ghost.append(i);
+  }
+  function accept() { if (sug.hidden) return false; inp.value += cands[idx].dataset.v; idx = 0; sug.hidden = true; ghost.innerHTML = ''; return true; }
+  inp.addEventListener('input', () => { idx = 0; renderSug(); });
+  inp.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); send(); return; }
+    if (sug.hidden) return;
+    if (e.key === 'Tab') { e.preventDefault(); accept(); }
+    else if (e.key === 'Escape') { sug.hidden = true; ghost.innerHTML = ''; }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); idx = (idx + 1) % cands.length; renderSug(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); idx = (idx - 1 + cands.length) % cands.length; renderSug(); }
+  });
+  $$('#sug > button[data-v]').forEach((b, i) => b.onclick = () => { idx = i; accept(); inp.focus(); });
+  $$('.words button').forEach(b => b.onclick = () => { inp.value += b.textContent; inp.focus(); renderSug(); });
+  $$('.helpers button').forEach(b => b.onclick = () => { inp.value = b.dataset.help; inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); renderSug(); });
+  $$('.asks button').forEach(b => b.onclick = () => { inp.value = b.textContent + ','; inp.focus(); renderSug(); });
+
+  /* 发送:追加一轮对话,并触发一次异步整理 */
+  let turnSeq = 3;
+  function send() {
+    const v = inp.value.trim(); if (!v) return;
+    const box = $('#msgs');
+    const me = document.createElement('div'); me.className = 'm me'; me.dataset.id = 'u' + turnSeq++; me.textContent = v; bindMsg(me); box.append(me);
+    inp.value = ''; ghost.innerHTML = ''; sug.hidden = true;
+    const ai = document.createElement('div'); ai.className = 'm ai'; ai.textContent = '收到,我先记下这一点。想到别的也可以接着说。';
+    setTimeout(() => { box.append(ai); box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); }, 700);
+    box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
+    summarize();
+  }
+  $('#send').onclick = send;
+
+  /* ================= 印象之海 ================= */
+  const wrap = $('#seawrap'), layer = $('#bubbles'), pop = $('#pop');
+  const KIND = {
+    one:  { label: '一句话印象', h: 38 },
+    feel: { label: '感受', h: 195 },
+    rate: { label: '评价', h: 345 },
+    idea: { label: '灵感', h: 265 },
+    word: { label: '印象词', h: 152 },
+    mine: { label: '我的补充', h: 95 },
+  };
+  const STATE = { draft: '待确认', ok: '已采纳', edit: '已校准' };
+  let W = 0, H = 0;
+  const measure = () => { const r = wrap.getBoundingClientRect(); W = r.width; H = r.height; };
+  addEventListener('resize', measure); measure();
+
+  // 背景里缓缓上升的光点
+  for (let i = 0; i < 16; i++) {
+    const d = document.createElement('i'); d.className = 'dust';
+    d.style.cssText = `left:${Math.random() * 100}%;--dx:${(Math.random() * 60 - 30).toFixed(0)}px;animation-duration:${(14 + Math.random() * 16).toFixed(1)}s;animation-delay:${(-Math.random() * 24).toFixed(1)}s;transform:scale(${(.6 + Math.random()).toFixed(2)})`;
+    $('#seabg').append(d);
+  }
+
+  const turnLabel = id => { const n = $$('.m.me').findIndex(m => m.dataset.id === id); return n < 0 ? id : `第 ${n + 1} 轮`; };
+  const short = t => { t = t.replace(/[。.!!]$/, ''); return t.length > 11 ? t.slice(0, 10) + '…' : t; };
+
+  const bubbles = [];
+  let cur = null, editing = false;
+
+  function make(d, delay = 0, fromAddBtn = false) {
+    const b = Object.assign({ st: 'draft', stars: 0, hl: '', gone: false, active: false, drag: false, freeze: null,
+      p1: Math.random() * 6.28, p2: Math.random() * 6.28, w1: .16 + Math.random() * .16, w2: .14 + Math.random() * .16, amp: 12 + Math.random() * 10 }, d);
+    b.x = (fromAddBtn ? W * .88 : b.hfx * W); b.y = fromAddBtn ? H * .82 : H + b.r + Math.random() * 50;
+    const el = document.createElement('div');
+    el.className = 'bub k-' + b.kind;
+    el.style.setProperty('--r', b.r + 'px');
+    el.style.setProperty('--bh', KIND[b.kind].h);
+    el.style.setProperty('--d', (-Math.random() * 8).toFixed(1) + 's');
+    el.innerHTML = '<div class="in"><small></small><div class="bst"></div><span></span></div><i class="dot"></i>';
+    el.addEventListener('mouseenter', () => hlMsgs(b, true));
+    el.addEventListener('mouseleave', () => hlMsgs(b, false));
+    layer.append(el);
+    b.el = el; bubbles.push(b); paint(b);
+    setTimeout(() => { b.active = true; el.classList.add('show'); }, delay);
+    return b;
+  }
+  function paint(b) {
+    const el = b.el, k = KIND[b.kind];
+    el.classList.remove('draft', 'ok', 'edit', 'rej'); el.classList.add(b.st);
+    el.querySelector('small').textContent = k.label;
+    el.querySelector('span').textContent = b.s;
+    el.querySelector('.bst').textContent = b.kind === 'rate' ? '★'.repeat(b.stars) + '☆'.repeat(5 - b.stars) : '';
+    el.title = b.st === 'rej' ? '已驳回,点击放回' : '';
+  }
+  const hlMsgs = (b, on) => b.hl.split(',').filter(Boolean).forEach(id => document.querySelector(`.m[data-id="${id}"]`)?.classList.toggle('hl', on));
+  function bindMsg(m) {
+    m.addEventListener('mouseenter', () => bubbles.forEach(b => b.hl.split(',').includes(m.dataset.id) && b.el.classList.add('glow')));
+    m.addEventListener('mouseleave', () => bubbles.forEach(b => b.el.classList.remove('glow')));
+  }
+  $$('.m.me').forEach(bindMsg);
+
+  // 物理:每个气泡围绕自己的"家"漂移,互相轻推,不会重叠
+  const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
+  function tick(now) {
+    const t = now / 1000;
+    const live = bubbles.filter(b => b.active && !b.gone);
+    for (const b of live) {
+      if (b.drag) continue;
+      let tx, ty;
+      if (b.st === 'rej') { tx = clamp(b.hfx, .08, .92) * W; ty = H - 30 + (reduce ? 0 : Math.sin(t * .6 + b.p1) * 5); }
+      else if (b.freeze) { tx = b.freeze.x; ty = b.freeze.y; }
+      else {
+        tx = b.hfx * W + (reduce ? 0 : Math.sin(t * b.w1 + b.p1) * b.amp);
+        ty = b.hfy * H + (reduce ? 0 : Math.cos(t * b.w2 + b.p2) * b.amp * .8);
+      }
+      if (b.st !== 'rej') { tx = clamp(tx, b.r + 6, W - b.r - 6); ty = clamp(ty, b.r + 6, H - b.r - 44); }
+      b.x += (tx - b.x) * .05; b.y += (ty - b.y) * .05;
+    }
+    const solid = live.filter(b => b.st !== 'rej');
+    for (let i = 0; i < solid.length; i++) for (let j = i + 1; j < solid.length; j++) {
+      const a = solid[i], c = solid[j];
+      const dx = c.x - a.x, dy = c.y - a.y, d = Math.hypot(dx, dy) || .01, min = a.r + c.r + 6;
+      if (d < min) {
+        const o = (min - d) * .5, nx = dx / d, ny = dy / d, wa = a.drag ? 0 : 1, wc = c.drag ? 0 : 1, s = (wa + wc) || 1;
+        a.x -= nx * o * wa / s; a.y -= ny * o * wa / s; c.x += nx * o * wc / s; c.y += ny * o * wc / s;
+      }
+    }
+    for (const b of live) b.el.style.transform = `translate3d(${(b.x - b.r).toFixed(1)}px,${(b.y - b.r).toFixed(1)}px,0)`;
+    requestAnimationFrame(tick);
+  }
+
+  /* 拖动 / 点击 */
+  const byEl = el => bubbles.find(b => b.el === el);
+  let down = null;
+  layer.addEventListener('pointerdown', e => {
+    const el = e.target.closest('.bub'); if (!el) return;
+    const b = byEl(el); if (!b || b.st === 'rej') return;
+    down = { b, px: e.clientX, py: e.clientY, moved: false };
+    el.setPointerCapture(e.pointerId);
+  });
+  layer.addEventListener('pointermove', e => {
+    if (!down) return;
+    const { b } = down;
+    if (!down.moved && Math.hypot(e.clientX - down.px, e.clientY - down.py) > 5) { down.moved = true; b.drag = true; b.el.classList.add('drag'); if (cur) closePop(); }
+    if (down.moved) {
+      const r = wrap.getBoundingClientRect();
+      b.x = clamp(e.clientX - r.left, b.r + 6, W - b.r - 6); b.y = clamp(e.clientY - r.top, b.r + 6, H - b.r - 44);
+      b.hfx = b.x / W; b.hfy = b.y / H;
+    }
+  });
+  const endDrag = () => {
+    if (!down) return;
+    const { b, moved } = down; down = null;
+    b.drag = false; b.el.classList.remove('drag');
+    if (!moved) openPop(b);
+  };
+  layer.addEventListener('pointerup', endDrag);
+  layer.addEventListener('pointercancel', endDrag);
+  layer.addEventListener('click', e => {
+    const el = e.target.closest('.bub'); if (!el) return;
+    const b = byEl(el);
+    if (b && b.st === 'rej') { b.st = 'draft'; paint(b); syncCal(); setStatus('已放回海面,等你确认', false); }
+  });
+
+  /* 详情气泡 */
+  function openPop(b, opts = {}) {
+    if (cur && cur !== b) closePop();
+    cur = b; editing = false;
+    b.freeze = opts.home ? { x: b.hfx * W, y: b.hfy * H } : { x: b.x, y: b.y };
+    pop.style.setProperty('--bh', KIND[b.kind].h);
+    fillPop(b);
+    pop.classList.add('open');
+    placePop(b);
+    if (opts.edit) toggleEdit();
+  }
+  function placePop(b) {
+    const pw = 276, ph = pop.offsetHeight, f = b.freeze;
+    let left = clamp(f.x - pw / 2, 4, W - pw - 4), top = f.y + b.r + 12;
+    if (top + ph > H - 4) top = f.y - b.r - 12 - ph;
+    pop.style.left = left + 'px'; pop.style.top = clamp(top, 4, Math.max(4, H - ph - 4)) + 'px';
+  }
+  function fillPop(b) {
+    const k = KIND[b.kind];
+    pop.innerHTML = `
+      <div class="pk"><span>${k.label}</span><em class="tg ${b.st}">${STATE[b.st]}</em></div>
+      ${b.kind === 'rate' ? `<div class="pstars">${[1, 2, 3, 4, 5].map(i => `<span data-i="${i}" class="${i <= b.stars ? 'on' : ''}">★</span>`).join('')}</div>` : ''}
+      <div class="pt" spellcheck="false">${b.t || ''}</div>
+      ${b.hl ? `<div class="ps">依据${b.hl.split(',').map(id => `<button data-hl="${id}">${turnLabel(id)}</button>`).join('')}</div>` : ''}
+      <div class="pa"><button class="y" ${b.st !== 'draft' ? 'hidden' : ''}>采纳</button><button class="e">编辑</button><button class="n">驳回</button></div>`;
+    pop.querySelectorAll('[data-hl]').forEach(x => x.onclick = () => {
+      const m = document.querySelector(`.m[data-id="${x.dataset.hl}"]`); if (!m) return;
+      m.scrollIntoView({ behavior: 'smooth', block: 'center' }); m.classList.add('hl'); setTimeout(() => m.classList.remove('hl'), 1600);
+    });
+    pop.querySelectorAll('.pstars span').forEach(s => s.onclick = () => { b.stars = +s.dataset.i; if (b.st === 'draft' || b.st === 'ok') b.st = 'edit'; paint(b); fillPop(b); syncCal(); });
+    pop.querySelector('.y').onclick = () => { b.st = 'ok'; paint(b); fillPop(b); syncCal(); };
+    pop.querySelector('.e').onclick = toggleEdit;
+    pop.querySelector('.n').onclick = () => { const x = b; closePop(); x.st = 'rej'; x.hfx = clamp(x.hfx, .1, .9); paint(x); syncCal(); setStatus('已驳回,它沉到海底了,点一下可以放回来', false); };
+  }
+  function toggleEdit() {
+    const b = cur; if (!b) return;
+    const pt = pop.querySelector('.pt'), eb = pop.querySelector('.e');
+    if (!editing) {
+      editing = true; pt.contentEditable = 'true'; eb.textContent = '完成'; pt.focus();
+      const r = document.createRange(); r.selectNodeContents(pt); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    } else {
+      editing = false;
+      const v = pt.textContent.trim();
+      if (!v && b.kind === 'mine') { removeBubble(b); closePop(true); return; }
+      if (v) { b.t = v; b.s = b.kind === 'word' ? v : short(v); }
+      if (b.kind !== 'mine') b.st = 'edit'; else b.st = 'ok';
+      paint(b); fillPop(b); syncCal();
+    }
+  }
+  function closePop(skipClean) {
+    if (!cur) return;
+    const b = cur; cur = null; editing = false; b.freeze = null;
+    pop.classList.remove('open');
+    if (!skipClean && b.kind === 'mine' && !b.t) removeBubble(b);
+  }
+  function removeBubble(b) { b.gone = true; b.el.remove(); }
+  document.addEventListener('pointerdown', e => { if (cur && !e.target.closest('#pop') && !e.target.closest('.bub')) closePop(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && cur) closePop(); });
+
+  /* 补充一条:用户自己写的,直接是已采纳 */
+  $('#addb').onclick = () => {
+    const rest = bubbles.filter(x => !x.gone && x.st !== 'rej');
+    const b = make({ id: 'm' + Date.now(), kind: 'mine', s: '写一句', t: '', r: 50, hfx: .72, hfy: .8, st: 'ok' }, 0, true);
+    b.active = true; b.el.classList.add('show');
+    openPop(b, { home: true, edit: true });
+  };
+
+  /* 异步整理 */
+  const status = $('#status');
+  function setStatus(text, busy) { status.classList.toggle('done', !busy); $('#stxt').textContent = text; }
+  const queue = [
+    { id: 'idea', kind: 'idea', s: '全家人都在演戏', t: '想写一个关于「全家人都在配合演戏」的短篇。', hl: 'u2', r: 66, hfx: .5, hfy: .7 },
+    { id: 'idea2', kind: 'idea', s: '重看饮食男女', t: '想把李安的「父亲三部曲」按顺序重看一遍。', hl: 'u2', r: 56, hfx: .2, hfy: .8 },
+  ];
+  function spawn() {
+    const d = queue.shift();
+    if (d) { make(d); setStatus('已整理完成,新增 1 个气泡等你确认', false); }
+    else setStatus('已整理完成,这一轮没有新的印象', false);
+    $('#again').disabled = !queue.length;
+  }
+  function summarize() { $('#again').disabled = true; setStatus('正在根据最新一轮对话整理…', true); setTimeout(spawn, 1900); }
+  $('#again').onclick = summarize;
+
+  /* 日历里的展示:只有被用户采纳或校准过的一句话印象才会出现 */
+  function syncCal() {
+    const o = bubbles.find(b => b.id === 'one'), r = bubbles.find(b => b.id === 'rate'), tip = $('#calText');
+    const stars = r && r.st !== 'rej' ? '★'.repeat(r.stars) : '';
+    if (!o || o.st === 'rej') { tip.className = 'tip faint'; tip.textContent = '还没有写下感受'; }
+    else if (o.st === 'draft') { tip.className = 'tip faint'; tip.innerHTML = `${o.t}<small>待确认,采纳后才会出现在日历里</small>`; }
+    else { tip.className = 'tip'; tip.innerHTML = `${o.t}<small>喜宴 · ${stars} · ${o.st === 'edit' ? '已校准' : '已采纳'}</small>`; }
+  }
+
+  /* 初始气泡 */
+  [
+    { id: 'one',  kind: 'one',  s: '笑声里藏着父亲的沉默', t: '笑声里藏着一个父亲的沉默与体面。', hl: 'u1,u2', r: 94, hfx: .5, hfy: .24 },
+    { id: 'feel', kind: 'feel', s: '好笑,也难受', t: '好笑与难受同时发生。难受主要是替父亲:他什么都懂,却选择不拆穿。', hl: 'u1,u2', r: 70, hfx: .24, hfy: .5 },
+    { id: 'rate', kind: 'rate', s: '克制,但很重', t: '克制,但很重', stars: 5, st: 'ok', r: 62, hfx: .77, hfy: .47 },
+    { id: 'w1', kind: 'word', s: '隐忍', t: '隐忍', hl: 'u2', r: 34, hfx: .13, hfy: .2 },
+    { id: 'w2', kind: 'word', s: '体面', t: '体面', hl: 'u2', r: 34, hfx: .87, hfy: .17 },
+    { id: 'w3', kind: 'word', s: '心照不宣', t: '心照不宣', hl: 'u2', r: 42, hfx: .8, hfy: .7 },
+    { id: 'w4', kind: 'word', s: '钝痛', t: '钝痛', hl: 'u1', r: 34, hfx: .3, hfy: .95, st: 'rej' },
+  ].forEach((d, i) => make(d, 150 + i * 160));
+
+  requestAnimationFrame(tick);
+  setTimeout(() => { setStatus('已根据第 2 轮对话整理,等你确认', false); $('#again').disabled = !queue.length; spawn(); }, 3400);
+  syncCal();
+</script>
+</body>
+</html>
