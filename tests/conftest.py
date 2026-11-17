@@ -89,6 +89,12 @@ class FakeTMDB(TMDB):
     async def original_title(self, tmdb_id):
         return self.MOVIES[tmdb_id]["original_title"]
 
+    async def film_info(self, tmdb_id):
+        self.film_calls = getattr(self, "film_calls", 0) + 1
+        return {"original_title": self.MOVIES[tmdb_id]["original_title"], "tagline": "", "runtime": 99,
+                "countries": ["中国"], "cast": ["演员甲"], "keywords": ["家庭"],
+                "ratings": [{"source": "TMDB", "value": "7.8", "votes": 100}], "similar": []}
+
 
 class FakeSearch:
     provider = "fake"
@@ -112,7 +118,8 @@ class Env:
         self.llm = FakeLLM()
         self.images = FakeImages()
         self.search = FakeSearch()
-        self.client = TestClient(create_app(self.settings, self.llm, self.images, FakeTMDB(), self.search))
+        self.tmdb = FakeTMDB()
+        self.client = TestClient(create_app(self.settings, self.llm, self.images, self.tmdb, self.search))
 
     def add_entry(self, tmdb_id: int = 1, **extra: Any) -> dict[str, Any]:
         movie = FakeTMDB.MOVIES[tmdb_id]

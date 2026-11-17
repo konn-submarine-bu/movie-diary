@@ -72,7 +72,7 @@ data/
 └── clips/             上传的截图 JPEG
 ```
 
-五张表：
+七张表：
 
 | 表 | 内容 |
 |---|---|
@@ -81,6 +81,12 @@ data/
 | `posters` | 海报：台词、意境、提示词、文件名，以及生图失败时的降级原因 |
 | `clips` | 收藏的台词和截图 |
 | `poems` | 保存的诗：诗人、标题、正文 |
+| `impressions` | 单片页的「印象」气泡：类型、短句、全文、状态（待确认 / 已采纳 / 已校准 / 已驳回）、依据的对话编号、用户拖动后的位置 |
+| `film_info` | 单片页的电影信息缓存，按 TMDB 编号存，30 天过期 |
+
+另有一张内部表 `impression_state`，记录每部电影整理到了第几条消息。
+
+采纳的「一句话印象」会同步写进 `entries.note`，采纳的「评价」同步写进 `entries.rating`。日历、往年今日读的还是这两个字段，不需要另外查气泡。
 
 删除一部电影会级联删除它的对话、海报、收藏和诗。删除电影或海报时，对应的图片文件也会一并删掉。
 
@@ -101,7 +107,15 @@ data/
 | `DELETE /api/entries/{id}` | 删除 |
 | `GET /api/on-this-day?on=YYYY-MM-DD` | 往年同月同日看过的 |
 | `GET /api/chat`、`POST /api/chat`、`DELETE /api/chat` | 全局对话：读取、发送、清空 |
-| `GET/POST/DELETE /api/entries/{id}/chat` | 单片对话 |
+| `GET/POST/DELETE /api/entries/{id}/chat` | 单片对话。发送后的回复里带 `user_message`，助手消息的 `meta.choices` 是可点选的快捷回答 |
+| `GET /api/entries/{id}/impressions` | 印象气泡列表。第一次访问时，把已有的 `note` 和 `rating` 生成为「已校准」的气泡 |
+| `POST /api/entries/{id}/impressions` | 用户自己补充一个气泡，body `{"short": "...", "text": "..."}`，直接是已采纳 |
+| `PATCH /api/impressions/{id}` | 改状态、文字、星级、位置。改了文字或星级会自动变成「已校准」 |
+| `DELETE /api/impressions/{id}` | 删除气泡 |
+| `POST /api/entries/{id}/impressions/refresh` | 让 LLM 根据新增的对话整理气泡，可能要几十秒 |
+| `GET /api/entries/{id}/film` | 关键词、演员、相似电影、TMDB 评分 |
+| `GET /api/entries/{id}/reviews` | 联网搜到的影评摘要和来源，原样返回 |
+| `POST /api/entries/{id}/compose-hints` | 输入补全：根据写到一半的草稿给出续写和可选的词 |
 | `POST /api/entries/{id}/posters` | AI 生图海报，body `{"quote": "...", "style": "ink", "extra": "..."}`，`style` 和 `extra` 选填，`extra` 最多 200 字 |
 | `GET /api/poster-styles` | 预置的画面风格列表 |
 | `POST /api/entries/{id}/collage` | 剧照拼贴，body `{"quotes": ["...", ...]}`，1 到 4 句 |
@@ -130,6 +144,7 @@ data/
 | `add_to_wishlist` | 放进想看清单，可带理由 |
 | `save_quote` | 收藏一句台词（必须是原话） |
 | `make_poster` | 把一句台词做成 AI 生图海报 |
+| `offer_choices` | 给当前追问提供 2 到 4 个可点选的回答，只在单片对话里显示 |
 
 Agent 不能直接调用剧照拼贴和一键成诗，这两个是界面上的功能。
 
@@ -148,6 +163,12 @@ Agent 不能直接调用剧照拼贴和一键成诗，这两个是界面上的�
 | `stills_not_found` | TMDB 没有可用剧照 |
 | `still_unreachable`、`still_download_failed` | 剧照下载失败，多半是网络或代理拦了 `image.tmdb.org` |
 | `poster_too_many_quotes`、`poster_quote_too_long` | 超出拼贴或 AI 海报的句数、字数上限 |
+| `impression_not_found` | 没有这个印象气泡 |
+| `impression_short_empty`、`impression_stars_required` | 气泡短句为空，或已采纳的评价气泡没有星级 |
+| `impression_summary_invalid` | LLM 整理印象时两次都没返回可解析的 JSON |
+| `compose_hints_invalid` | LLM 返回的补全建议无法解析 |
+| `film_info_unavailable` | 这部电影没有 TMDB 编号，没有更多信息可显示 |
+| `choices_invalid` | `offer_choices` 给的有效选项少于两个 |
 | `poster_style_unknown`、`poster_extra_too_long` | 风格不在预置列表里，或补充要求超过 200 字 |
 | `poster_font_missing` | 找不到中文字体，设 `POSTER_FONT` |
 | `search_no_results` | 联网搜索没有结果 |
@@ -161,13 +182,16 @@ app/
 ├── main.py        FastAPI 应用、全部接口
 ├── agent.py       系统提示、工具定义、工具循环
 ├── llm.py         OpenAI 兼容的对话客户端
-├── tmdb.py        TMDB：搜片、详情、剧照
+├── tmdb.py        TMDB：搜片、详情、剧照、关键词与相似电影
 ├── websearch.py   Tavily / DuckDuckGo 联网搜索
 ├── posters.py     AI 生图海报：提示词、生图、文字排版、渐变降级
 ├── collage.py     剧照拼贴：版式、下载、排字
 ├── quotes.py      Wikiquote 台词查询与解析
 ├── poems.py       22 位诗人与成诗
 ├── clips.py       台词与截图的校验和存储
+├── impressions.py 单片页的印象整理：提示词、解析、锁定规则
+├── filmpage.py    单片页的电影信息缓存、影评搜索、输入补全
+├── llmjson.py     从 LLM 回复里取出 JSON
 ├── db.py          SQLite 表结构与读写
 ├── config.py      环境变量
 └── errors.py      统一的错误类型
@@ -239,6 +263,21 @@ Agent 的行为由[系统提示](../app/agent.py)约束：
 一次回复里，Agent 最多连续调用 `MAX_AGENT_STEPS` 轮工具（默认 6）。用完还没有最终答案，会返回 `agent_step_limit`，让你把问题收窄再问。对话历史取最近 40 条。
 
 如果这一轮改动了日记（新增或更新），页面会自动刷新日历。
+
+### 印象整理的规则
+
+单片页的「印象之海」里，AI 提炼的内容是气泡。每次对话后，页面会请求一次整理，只处理上次整理之后新增的消息。规则由服务端代码保证，不依赖提示词：
+
+- 已采纳和已校准的气泡不会被模型改写，也不会被重复提出。只有「待确认」的气泡可以被模型改写。
+- 驳回过的内容会告诉模型不要再提，服务端还会按文本相似度再过滤一遍。
+- 一次最多新增 3 个，海里最多同时有 24 个未驳回的气泡。
+- 「一句话印象」和「评价」各自最多有一个已采纳的。采纳新的会把旧的退回为已驳回。
+- 评价气泡必须带 1 到 5 的星级，没有的会被丢弃。
+- 依据的消息编号必须属于这部电影，不存在的会被去掉。
+- 同一部电影的整理请求会排队，不会并发写入。
+- LLM 回复不是合法 JSON 时重试一次，仍失败返回 `impression_summary_invalid`。
+
+采纳的「一句话印象」写进 `entries.note`。驳回它时，只有 `note` 还等于它写入的内容才会清空，用户手写过的感受不会被误删。评价和 `entries.rating` 同理。
 
 ### 剧照拼贴怎么拼
 

@@ -25,6 +25,8 @@ SYSTEM_PROMPT = """你是用户的「电影日记」伙伴，一个懂电影、�
 6. 维护「想看清单」：用户说想看某部电影、或者你推荐后用户表示想看时，用 add_to_wishlist 放进清单。
    用户说看完了，用 update_diary 把 status 改成 watched。
 7. 收藏台词：用户说出一句想留下的台词时，用 save_quote 收藏，台词必须是原话。
+8. 在单片对话里追问感受时，如果问题有几个自然的答案（例如「替谁难受」），用 offer_choices 给出 2 到 4 个简短选项，
+   方便不善表达的用户直接点选；问题本身仍写在回答正文里。
 
 工具使用规则：
 - 用户提到某部电影但日记里没有时，先 search_movie 确认是哪一部，再用 add_to_diary 记录（评分和感受以用户说的为准，没说就留空）。
@@ -99,6 +101,12 @@ TOOLS: list[dict[str, Any]] = [
             "style": {"type": "string", "enum": list(STYLES), "description": "可选。用户指定了画面风格时填写"},
             "extra": {"type": "string", "description": "可选。用户对画面的额外要求，原话即可，200 字内"}},
             "required": ["entry_id", "quote"]}}},
+    {"type": "function", "function": {
+        "name": "offer_choices",
+        "description": "给用户当前这个追问提供 2 到 4 个可点选的简短回答，每个不超过 12 个字。",
+        "parameters": {"type": "object", "properties": {
+            "choices": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 4}},
+            "required": ["choices"]}}},
 ]
 
 
@@ -186,6 +194,13 @@ class Agent:
                 raise AppError("entry_not_found", f"No diary entry with id {args['entry_id']}", 404)
             turn["changed"] = True
             return _full(entry)
+        if name == "offer_choices":
+            raw = args.get("choices")
+            picks = [c.strip()[:12] for c in raw if isinstance(c, str) and c.strip()] if isinstance(raw, list) else []
+            if len(picks) < 2:
+                raise AppError("choices_invalid", "offer_choices needs at least two non-empty choices", 422)
+            turn["choices"] = picks[:4]
+            return {"shown": turn["choices"]}
         if name == "make_poster":
             entry = db.get_entry(args["entry_id"])
             if entry is None:
@@ -237,7 +252,7 @@ class Agent:
                    for m in self._db.list_messages(entry_id, 40)]
         messages: list[dict[str, Any]] = [{"role": "system", "content": system}, *history,
                                           {"role": "user", "content": text}]
-        turn: dict[str, Any] = {"sources": [], "posters": [], "tools": [], "changed": False}
+        turn: dict[str, Any] = {"sources": [], "posters": [], "tools": [], "changed": False, "choices": []}
 
         final = ""
         for _ in range(self._s.max_agent_steps):
@@ -262,6 +277,9 @@ class Agent:
         sources = [s for s in turn["sources"] if not (s["url"] in seen or seen.add(s["url"]))]
         meta = {"sources": sources, "poster_ids": [p["id"] for p in turn["posters"]],
                 "tools": turn["tools"]}
-        self._db.add_message(entry_id, "user", text)
+        if turn["choices"] and entry_id is not None:
+            meta["choices"] = turn["choices"]
+        user_msg = self._db.add_message(entry_id, "user", text)
         saved = self._db.add_message(entry_id, "assistant", final, meta)
-        return {"message": {**saved, "posters": turn["posters"]}, "diary_changed": turn["changed"]}
+        return {"message": {**saved, "posters": turn["posters"]}, "user_message": user_msg,
+                "diary_changed": turn["changed"]}

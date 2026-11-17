@@ -93,3 +93,20 @@ class TMDB:
         """English title for Wikiquote lookups. Uses language=en-US because the default is zh-CN."""
         d = await self._get(f"/movie/{tmdb_id}", {"language": "en-US"})
         return d.get("title") or d.get("original_title") or ""
+
+    async def film_info(self, tmdb_id: int) -> dict[str, Any]:
+        """Extra facts for the per-movie page: cast, keywords, similar films and TMDB's own rating."""
+        d = await self._get(f"/movie/{tmdb_id}", {"append_to_response": "credits,keywords,similar"})
+        cast = [c["name"] for c in d.get("credits", {}).get("cast", [])[:6] if c.get("name")]
+        keywords = [k["name"] for k in d.get("keywords", {}).get("keywords", [])[:8] if k.get("name")]
+        similar = [{"tmdb_id": r["id"], "title": r.get("title") or r.get("original_title") or "",
+                    "year": _year(r.get("release_date")),
+                    "poster_url": f"{IMG}{r['poster_path']}" if r.get("poster_path") else ""}
+                   for r in d.get("similar", {}).get("results", [])[:6]]
+        ratings = []
+        if d.get("vote_count"):
+            ratings.append({"source": "TMDB", "value": f"{d.get('vote_average', 0):.1f}", "votes": d["vote_count"]})
+        return {"original_title": d.get("original_title") or "", "tagline": d.get("tagline") or "",
+                "runtime": d.get("runtime") or None,
+                "countries": [c["name"] for c in d.get("production_countries", []) if c.get("name")],
+                "cast": cast, "keywords": keywords, "ratings": ratings, "similar": similar}

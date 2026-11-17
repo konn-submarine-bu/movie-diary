@@ -7,6 +7,8 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from .errors import AppError
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,6 +70,30 @@ CREATE TABLE IF NOT EXISTS poems (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_poems_entry ON poems(entry_id, id);
+CREATE TABLE IF NOT EXISTS impressions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  entry_id INTEGER NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('one', 'feel', 'rate', 'idea', 'word', 'mine')),
+  short TEXT NOT NULL,
+  text TEXT NOT NULL DEFAULT '',
+  stars INTEGER CHECK (stars IS NULL OR stars BETWEEN 1 AND 5),
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'ok', 'edit', 'rej')),
+  source_msg_ids TEXT NOT NULL DEFAULT '[]',
+  pos_x REAL,
+  pos_y REAL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_impressions_entry ON impressions(entry_id, id);
+CREATE TABLE IF NOT EXISTS impression_state (
+  entry_id INTEGER PRIMARY KEY REFERENCES entries(id) ON DELETE CASCADE,
+  last_msg_id INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS film_info (
+  tmdb_id INTEGER PRIMARY KEY,
+  data TEXT NOT NULL,
+  fetched_at TEXT NOT NULL
+);
 """
 
 ENTRY_FIELDS = (
@@ -98,6 +124,21 @@ def _clip(row: sqlite3.Row) -> dict[str, Any]:
     d = dict(row)
     d["url"] = f"/media/clips/{d['filename']}" if d["filename"] else ""
     return d
+
+
+def _impression(row: sqlite3.Row) -> dict[str, Any]:
+    d = dict(row)
+    d["source_msg_ids"] = json.loads(d["source_msg_ids"])
+    return d
+
+
+ACTIVE = ("ok", "edit")
+IMPRESSION_PATCH_FIELDS = ("short", "text", "stars", "status", "pos_x", "pos_y")
+
+
+def _written(imp: dict[str, Any]) -> Any:
+    """The value an adopted impression pushes into its diary entry (note for `one`, rating for `rate`)."""
+    return (imp["text"] or imp["short"]) if imp["kind"] == "one" else imp["stars"]
 
 
 def _poster(row: sqlite3.Row) -> dict[str, Any]:
@@ -329,3 +370,143 @@ class Database:
     def delete_poster(self, poster_id: int) -> None:
         with self._tx() as conn:
             conn.execute("DELETE FROM posters WHERE id = ?", (poster_id,))
+
+    # impressions -------------------------------------------------------
+    def _sync_entry(self, conn: sqlite3.Connection, before: dict[str, Any], after: dict[str, Any]) -> None:
+        """Keep entries.note / entries.rating equal to the adopted `one` / `rate` impression.
+
+        Adopting one makes it the only adopted impression of its kind. Dropping it clears the entry
+        field only if the field still holds what the impression wrote, so a note typed by hand survives.
+        """
+        kind = after["kind"]
+        if kind not in ("one", "rate"):
+            return
+        col = "note" if kind == "one" else "rating"
+        stamp = now_iso()
+        if after["status"] in ACTIVE:
+            conn.execute("UPDATE impressions SET status = 'rej', updated_at = ? WHERE entry_id = ? AND kind = ?"
+                         " AND id != ? AND status IN ('ok', 'edit')",
+                         (stamp, after["entry_id"], kind, after["id"]))
+            conn.execute(f"UPDATE entries SET {col} = ?, updated_at = ? WHERE id = ?",
+                         (_written(after), stamp, after["entry_id"]))
+        elif before["status"] in ACTIVE:
+            row = conn.execute(f"SELECT {col} FROM entries WHERE id = ?", (after["entry_id"],)).fetchone()
+            if row is not None and row[col] == _written(before):
+                conn.execute(f"UPDATE entries SET {col} = ?, updated_at = ? WHERE id = ?",
+                             ("" if kind == "one" else None, stamp, after["entry_id"]))
+
+    def list_impressions(self, entry_id: int) -> list[dict[str, Any]]:
+        with self._tx() as conn:
+            rows = conn.execute("SELECT * FROM impressions WHERE entry_id = ? ORDER BY id", (entry_id,)).fetchall()
+        return [_impression(r) for r in rows]
+
+    def get_impression(self, imp_id: int) -> dict[str, Any] | None:
+        with self._tx() as conn:
+            row = conn.execute("SELECT * FROM impressions WHERE id = ?", (imp_id,)).fetchone()
+        return _impression(row) if row else None
+
+    def add_impression(self, entry_id: int, kind: str, short: str, text: str = "", stars: int | None = None,
+                       status: str = "draft", source_msg_ids: list[int] | None = None,
+                       pos: tuple[float, float] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+        if kind == "rate" and status in ACTIVE and not stars:
+            raise AppError("impression_stars_required", "an adopted rating bubble needs stars from 1 to 5", 422)
+        stamp = now_iso()
+        with self._tx() as conn:
+            cur = conn.execute(
+                "INSERT INTO impressions (entry_id, kind, short, text, stars, status, source_msg_ids, pos_x, pos_y,"
+                " created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (entry_id, kind, short, text, stars if kind == "rate" else None, status,
+                 json.dumps(source_msg_ids or []), pos[0] if pos else None, pos[1] if pos else None, stamp, stamp))
+            after = _impression(conn.execute("SELECT * FROM impressions WHERE id = ?", (cur.lastrowid,)).fetchone())
+            self._sync_entry(conn, {**after, "status": "rej"}, after)
+            after = _impression(conn.execute("SELECT * FROM impressions WHERE id = ?", (cur.lastrowid,)).fetchone())
+            entry = _entry(conn.execute("SELECT * FROM entries WHERE id = ?", (entry_id,)).fetchone())
+        return after, entry
+
+    def update_impression(self, imp_id: int, patch: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]] | None:
+        values = {k: v for k, v in patch.items() if k in IMPRESSION_PATCH_FIELDS}
+        with self._tx() as conn:
+            row = conn.execute("SELECT * FROM impressions WHERE id = ?", (imp_id,)).fetchone()
+            if row is None:
+                return None
+            before = _impression(row)
+            after = {**before, **values}
+            edited = any(k in values and values[k] != before[k] for k in ("short", "text", "stars"))
+            if edited and "status" not in values and before["status"] in ("draft", "ok"):
+                after["status"] = "edit"
+            if after["kind"] != "rate":
+                after["stars"] = None
+            if after["kind"] == "rate" and after["status"] in ACTIVE and not after["stars"]:
+                raise AppError("impression_stars_required", "an adopted rating bubble needs stars from 1 to 5", 422)
+            conn.execute("UPDATE impressions SET short = ?, text = ?, stars = ?, status = ?, pos_x = ?, pos_y = ?,"
+                         " updated_at = ? WHERE id = ?",
+                         (after["short"], after["text"], after["stars"], after["status"],
+                          after["pos_x"], after["pos_y"], now_iso(), imp_id))
+            self._sync_entry(conn, before, after)
+            after = _impression(conn.execute("SELECT * FROM impressions WHERE id = ?", (imp_id,)).fetchone())
+            entry = _entry(conn.execute("SELECT * FROM entries WHERE id = ?", (before["entry_id"],)).fetchone())
+        return after, entry
+
+    def revise_impression(self, imp_id: int, short: str, text: str, stars: int | None,
+                          source_msg_ids: list[int]) -> bool:
+        """Model-side rewrite. Only touches drafts, so adopted or calibrated bubbles can never be overwritten."""
+        with self._tx() as conn:
+            row = conn.execute("SELECT * FROM impressions WHERE id = ? AND status = 'draft'", (imp_id,)).fetchone()
+            if row is None:
+                return False
+            merged = sorted({*json.loads(row["source_msg_ids"]), *source_msg_ids})
+            conn.execute("UPDATE impressions SET short = ?, text = ?, stars = ?, source_msg_ids = ?, updated_at = ?"
+                         " WHERE id = ?",
+                         (short, text, stars if row["kind"] == "rate" else None, json.dumps(merged), now_iso(), imp_id))
+        return True
+
+    def seed_impressions(self, entry: dict[str, Any]) -> bool:
+        """First visit to an entry that already has a note or rating: show them as calibrated bubbles, once."""
+        stamp = now_iso()
+        with self._tx() as conn:
+            if conn.execute("INSERT OR IGNORE INTO impression_state (entry_id, last_msg_id) VALUES (?, 0)",
+                            (entry["id"],)).rowcount == 0:
+                return False
+            if entry["note"]:
+                note = entry["note"]
+                conn.execute("INSERT INTO impressions (entry_id, kind, short, text, status, created_at, updated_at)"
+                             " VALUES (?, 'one', ?, ?, 'edit', ?, ?)",
+                             (entry["id"], note if len(note) <= 40 else note[:39] + "…", note, stamp, stamp))
+            if entry["rating"]:
+                conn.execute("INSERT INTO impressions (entry_id, kind, short, stars, status, created_at, updated_at)"
+                             " VALUES (?, 'rate', '我的评分', ?, 'edit', ?, ?)",
+                             (entry["id"], entry["rating"], stamp, stamp))
+        return True
+
+    def delete_impression(self, imp_id: int) -> dict[str, Any] | None:
+        with self._tx() as conn:
+            row = conn.execute("SELECT * FROM impressions WHERE id = ?", (imp_id,)).fetchone()
+            if row is None:
+                return None
+            before = _impression(row)
+            conn.execute("DELETE FROM impressions WHERE id = ?", (imp_id,))
+            self._sync_entry(conn, before, {**before, "status": "rej"})
+            return _entry(conn.execute("SELECT * FROM entries WHERE id = ?", (before["entry_id"],)).fetchone())
+
+    def last_summarized(self, entry_id: int) -> int:
+        with self._tx() as conn:
+            row = conn.execute("SELECT last_msg_id FROM impression_state WHERE entry_id = ?", (entry_id,)).fetchone()
+        return row["last_msg_id"] if row else 0
+
+    def set_last_summarized(self, entry_id: int, msg_id: int) -> None:
+        with self._tx() as conn:
+            conn.execute("INSERT INTO impression_state (entry_id, last_msg_id) VALUES (?, ?)"
+                         " ON CONFLICT(entry_id) DO UPDATE SET last_msg_id = excluded.last_msg_id",
+                         (entry_id, msg_id))
+
+    # film info cache ---------------------------------------------------
+    def get_film_info(self, tmdb_id: int) -> tuple[dict[str, Any], str] | None:
+        with self._tx() as conn:
+            row = conn.execute("SELECT data, fetched_at FROM film_info WHERE tmdb_id = ?", (tmdb_id,)).fetchone()
+        return (json.loads(row["data"]), row["fetched_at"]) if row else None
+
+    def put_film_info(self, tmdb_id: int, data: dict[str, Any]) -> None:
+        with self._tx() as conn:
+            conn.execute("INSERT INTO film_info (tmdb_id, data, fetched_at) VALUES (?, ?, ?)"
+                         " ON CONFLICT(tmdb_id) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at",
+                         (tmdb_id, json.dumps(data, ensure_ascii=False), now_iso()))

@@ -15,6 +15,8 @@ from .clips import MAX_IMAGE_BYTES, add_text_clip, store_image
 from .collage import CollageService
 from .config import ROOT, Settings
 from .db import Database
+from .filmpage import FilmPage
+from .impressions import ImpressionService
 from .errors import AppError, describe
 from .llm import LLM, OpenAICompatLLM
 from .poems import POETS, PoemService, style_of
@@ -77,6 +79,24 @@ class PosterIn(BaseModel):
     extra: str = ""
 
 
+class ImpressionIn(BaseModel):
+    short: str = Field(min_length=1, max_length=40)
+    text: str = Field(default="", max_length=600)
+
+
+class ImpressionPatch(BaseModel):
+    short: str | None = Field(default=None, min_length=1, max_length=40)
+    text: str | None = Field(default=None, max_length=600)
+    stars: int | None = Field(default=None, ge=1, le=5)
+    status: Literal["draft", "ok", "edit", "rej"] | None = None
+    pos_x: float | None = Field(default=None, ge=0, le=1)
+    pos_y: float | None = Field(default=None, ge=0, le=1)
+
+
+class HintIn(BaseModel):
+    draft: str = Field(min_length=1, max_length=1000)
+
+
 class CollageIn(BaseModel):
     quotes: list[str] = Field(min_length=1, max_length=4)
 
@@ -96,6 +116,8 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
     poster_service = PosterService(settings, db, llm, images or OpenAICompatImages(settings))
     agent = Agent(settings, db, llm, tmdb, search, poster_service)
     poem_service = PoemService(llm, db)
+    impression_service = ImpressionService(db, llm)
+    film_page = FilmPage(db, tmdb, search, llm)
     collage_service = CollageService(settings, db, tmdb)
     wikiquote = wikiquote or Wikiquote()
 
@@ -234,6 +256,61 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
     def clear_entry_chat(entry_id: int) -> None:
         need_entry(entry_id)
         db.clear_messages(entry_id)
+
+    # ---- impressions -------------------------------------------------
+    def need_impression(imp_id: int) -> dict[str, Any]:
+        imp = db.get_impression(imp_id)
+        if imp is None:
+            raise AppError("impression_not_found", f"No impression with id {imp_id}", 404)
+        return imp
+
+    @app.get("/api/entries/{entry_id}/impressions")
+    def list_impressions(entry_id: int) -> dict[str, Any]:
+        db.seed_impressions(need_entry(entry_id))
+        return {"impressions": db.list_impressions(entry_id)}
+
+    @app.post("/api/entries/{entry_id}/impressions", status_code=201)
+    def add_impression(entry_id: int, body: ImpressionIn) -> dict[str, Any]:
+        need_entry(entry_id)
+        imp, entry = db.add_impression(entry_id, "mine", body.short.strip(), body.text.strip(), status="ok")
+        return {"impression": imp, "entry": entry}
+
+    @app.patch("/api/impressions/{imp_id}")
+    def patch_impression(imp_id: int, body: ImpressionPatch) -> dict[str, Any]:
+        need_impression(imp_id)
+        patch = body.model_dump(exclude_unset=True)
+        for key in ("short", "text"):
+            if isinstance(patch.get(key), str):
+                patch[key] = patch[key].strip()
+        if "short" in patch and not patch["short"]:
+            raise AppError("impression_short_empty", "short must not be blank", 422)
+        result = db.update_impression(imp_id, patch)
+        assert result is not None
+        return {"impression": result[0], "entry": result[1]}
+
+    @app.delete("/api/impressions/{imp_id}")
+    def delete_impression(imp_id: int) -> dict[str, Any]:
+        need_impression(imp_id)
+        return {"entry": db.delete_impression(imp_id)}
+
+    @app.post("/api/entries/{entry_id}/impressions/refresh")
+    async def refresh_impressions(entry_id: int) -> dict[str, Any]:
+        entry = need_entry(entry_id)
+        db.seed_impressions(entry)
+        return await impression_service.refresh(entry)
+
+    # ---- film page ---------------------------------------------------
+    @app.get("/api/entries/{entry_id}/film")
+    async def film_info(entry_id: int) -> dict[str, Any]:
+        return {"info": await film_page.info(need_entry(entry_id))}
+
+    @app.get("/api/entries/{entry_id}/reviews")
+    async def film_reviews(entry_id: int) -> dict[str, Any]:
+        return await film_page.reviews(need_entry(entry_id))
+
+    @app.post("/api/entries/{entry_id}/compose-hints")
+    async def compose_hints(entry_id: int, body: HintIn) -> dict[str, Any]:
+        return await film_page.hints(need_entry(entry_id), body.draft)
 
     # ---- posters -----------------------------------------------------
     @app.post("/api/entries/{entry_id}/posters", status_code=201)
