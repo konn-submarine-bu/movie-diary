@@ -582,7 +582,7 @@ function renderHero(quiet) {
     const link = (label, fn, cls = "") => el("button", { type: "button", class: `lnk ${cls}`.trim(), onclick: fn }, label);
     txt.append(el("div", { class: "acts" },
       wished ? link("看完了 →", () => markWatched(e), "strong") : null,
-      link("聊聊这部 →", () => { setScope(e.id); $("chat-input").focus(); }),
+      link("聊聊这部 →", () => { location.hash = `#/movie/${e.id}`; }),
       wished ? null : link("一键成诗", () => openPoemDialog(e), "strong"),
       link("编辑", () => { state.editing = e.id; renderHero(true); }),
       link("删除", () => removeEntry(e), "danger")));
@@ -1326,7 +1326,8 @@ function boot() {
   setScope(null);
   loadEntries()
     .then(() => { renderMonth(true); renderHero(false); renderWall(); renderWish(); renderOtd(); })
-    .catch((err) => showError($("diary-error"), err));
+    .catch((err) => showError($("diary-error"), err))
+    .finally(() => { window.__entriesReady = true; if (window.moviePageRoute) window.moviePageRoute(); });
 }
 
 boot();

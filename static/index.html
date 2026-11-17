@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>电影日记</title>
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/movie.css">
 </head>
 <body data-view="cal">
   <div class="layer aurora" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -78,6 +79,63 @@
     <section class="wall" id="wall" aria-label="全部电影"></section>
     <section class="wish" id="wish" aria-label="想看清单"></section>
     <section class="clipwall" id="clipwall" aria-label="台词与截图收藏"></section>
+  </div>
+
+  <div class="mp" id="mp" aria-label="单片页面">
+    <header class="mp-top">
+      <button type="button" class="mp-back" id="mp-back" title="回到日历"><b aria-hidden="true">←</b> 回到日历</button>
+      <div class="mp-strip" id="mp-strip" aria-label="本月观影，点击切换"></div>
+      <span class="mp-sp"></span>
+      <span class="mp-saved" id="mp-saved" role="status"><i></i>已自动保存</span>
+    </header>
+    <div id="mp-error" class="error" role="alert" hidden></div>
+
+    <main class="mp-cols">
+      <section class="mp-col mp-film" id="mp-film" aria-label="电影信息"></section>
+
+      <section class="mp-col mp-chat" aria-label="对话">
+        <p class="mp-h"><span><b id="mp-ctitle"></b></span><em><span id="mp-cinfo"></span><button type="button" class="mp-lnk" id="mp-clear">清空对话</button></em></p>
+        <div class="mp-msgs" id="mp-msgs" aria-live="polite"></div>
+        <div id="mp-chat-error" class="error" role="alert" hidden></div>
+        <div class="mp-compose">
+          <div class="mp-sug" id="mp-sug" hidden></div>
+          <div class="mp-helpers">
+            <span class="lab">帮我表达</span>
+            <button type="button" data-help="我说不清，但大概是这种感觉：">说不清，你来猜</button>
+            <button type="button" data-help="如果用一个天气形容这部电影，它是">用天气 / 颜色比喻</button>
+            <button type="button" data-help="这部电影让我想到我自己的">联想到我的生活</button>
+            <button type="button" data-help="我想对其中一个角色说：">对角色说句话</button>
+          </div>
+          <div class="mp-box">
+            <pre class="mp-ghost" id="mp-ghost" aria-hidden="true"></pre>
+            <label class="sr-only" for="mp-inp">输入你的感受</label>
+            <textarea id="mp-inp" rows="3" maxlength="4000" placeholder="说说你的感受。词不达意也没关系，写几个字，我来帮你补全…"></textarea>
+            <div class="mp-bar"><span><kbd>Tab</kbd>采纳补全 <kbd>Esc</kbd>忽略 <kbd>⌘ ↵</kbd>发送</span><button type="button" class="mp-send" id="mp-send">发送</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="mp-col mp-sumcol" aria-label="我的印象">
+        <p class="mp-h"><span>IMPRESSION SEA · 印象之海</span><em>随对话浮现</em></p>
+        <div class="mp-status" id="mp-status"><i class="spin"></i><span id="mp-stxt"></span><button type="button" class="again" id="mp-again" disabled>重新整理 ↻</button></div>
+        <div id="mp-sea-error" class="error" role="alert" hidden></div>
+        <div class="mp-seawrap" id="mp-seawrap">
+          <div class="mp-seabg" id="mp-seabg" aria-hidden="true">
+            <svg class="mp-wave" viewBox="0 0 1200 120" preserveAspectRatio="none"><path d="M0 60 Q150 20 300 60 T600 60 T900 60 T1200 60 V120 H0Z"/></svg>
+            <svg class="mp-wave w2" viewBox="0 0 1200 120" preserveAspectRatio="none"><path d="M0 70 Q150 30 300 70 T600 70 T900 70 T1200 70 V120 H0Z"/></svg>
+            <div class="mp-sink">沉 底 · 已 驳 回</div>
+          </div>
+          <div class="mp-bubbles" id="mp-bubbles"></div>
+          <button type="button" class="mp-addb" id="mp-addb" aria-label="补充一条我自己的印象">+<small>补充</small></button>
+          <div class="mp-pop" id="mp-pop" role="dialog" aria-label="印象详情"></div>
+        </div>
+        <div class="mp-legend">
+          <span style="--bh:38"><i></i>一句话印象</span><span style="--bh:195"><i></i>感受</span><span style="--bh:345"><i></i>评价</span><span style="--bh:265"><i></i>灵感</span><span style="--bh:152"><i></i>印象词</span>
+        </div>
+        <p class="mp-hint">点气泡查看和校准 · 拖动可以挪位置 · 驳回的会沉到海底，点一下放回来</p>
+        <div class="mp-cal" id="mp-cal"></div>
+      </section>
+    </main>
   </div>
 
   <div class="status" id="status" role="status" aria-live="polite"></div>
@@ -156,5 +214,6 @@
   </dialog>
 
   <script src="/app.js" defer></script>
+  <script src="/movie.js" defer></script>
 </body>
 </html>

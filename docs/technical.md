@@ -195,11 +195,11 @@ app/
 ├── db.py          SQLite 表结构与读写
 ├── config.py      环境变量
 └── errors.py      统一的错误类型
-static/            前端：index.html、app.js、style.css（无构建步骤）
+static/            前端：index.html、app.js、style.css；单片页是 movie.js 和 movie.css（无构建步骤）
 tests/             自动化测试
 docs/demo/         录制动画用的脚本和替身后端
 docs/media/        README 里的动画
-design/            早期的界面设计稿
+design/            界面设计稿，包括单片页的 mockup-movie-page.html
 ```
 
 前端是原生 HTML、CSS、JS，没有构建步骤，改完刷新即可。
