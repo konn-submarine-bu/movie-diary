@@ -346,6 +346,15 @@ body[data-view=clips] .clipwall { display: block; columns: 280px; column-gap: 40
 .modes button { font-size: 13px; letter-spacing: .08em; color: var(--muted); padding: 2px 0; border-bottom: 1px solid transparent; transition: color .3s, border-color .3s; }
 .modes button:hover { color: var(--text); }
 .modes button[aria-pressed=true] { color: var(--accent-text); border-color: var(--accent); }
+#ai-opts { display: grid; gap: 10px; }
+#ai-opts[hidden] { display: none; }
+.opt-label { margin: 0 2px; }
+.opt-label span { margin-left: 8px; opacity: .7; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips button { font-size: 13px; letter-spacing: .06em; color: var(--muted); padding: 4px 12px; border: 1px solid color-mix(in srgb, var(--muted) 35%, transparent); border-radius: 16px; transition: color .3s, border-color .3s, background .3s; }
+.chips button:hover { color: var(--text); }
+.chips button[aria-pressed=true] { color: var(--accent-text); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+#extra-count { margin: -4px 2px 0; text-align: right; font-size: 12px; }
 #poster-count { margin: 0 2px; }
 #poster-count.warn { color: #e5786d; }
 .qtools { display: flex; gap: 22px; }

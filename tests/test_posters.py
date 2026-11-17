@@ -84,3 +84,35 @@ def test_poster_can_be_deleted(env, tmp_path):
     assert env.client.delete(f"/api/posters/{poster['id']}").status_code == 204
     assert not (tmp_path / "posters" / poster["filename"]).exists()
     assert env.client.delete(f"/api/posters/{poster['id']}").json()["error_code"] == "poster_not_found"
+
+
+def test_style_and_extra_reach_the_brief_prompt(env):
+    env.llm.replies = [text(BRIEF_JSON)]
+    entry = env.add_entry(1)
+    res = env.client.post(f"/api/entries/{entry['id']}/posters",
+                          json={"quote": "你好", "style": "ink", "extra": "只有一个背影"})
+    assert res.status_code == 201
+    user_msg = env.llm.calls[0]["messages"][-1]["content"]
+    assert "水墨留白" in user_msg and "只有一个背影" in user_msg
+
+
+def test_no_style_or_extra_adds_nothing_to_the_brief(env):
+    env.llm.replies = [text(BRIEF_JSON)]
+    make(env)
+    user_msg = env.llm.calls[0]["messages"][-1]["content"]
+    assert "画面风格" not in user_msg and "补充要求" not in user_msg
+
+
+def test_unknown_style_and_long_extra_are_rejected(env):
+    entry = env.add_entry(1)
+    url = f"/api/entries/{entry['id']}/posters"
+    bad = env.client.post(url, json={"quote": "你好", "style": "nope"})
+    assert bad.status_code == 422 and bad.json()["error_code"] == "poster_style_unknown"
+    long = env.client.post(url, json={"quote": "你好", "extra": "x" * 201})
+    assert long.status_code == 422 and long.json()["error_code"] == "poster_extra_too_long"
+
+
+def test_style_catalog_endpoint(env):
+    data = env.client.get("/api/poster-styles").json()
+    assert data["max_extra"] == 200
+    assert {"key": "ink", "label": "水墨留白"} in data["styles"]

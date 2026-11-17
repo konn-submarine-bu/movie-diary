@@ -41,7 +41,27 @@ image_prompt 要求：
 - 用意象和氛围表达台词，不要复刻具体剧照，不要出现真实演员的面孔或可辨认的人物肖像。
 - 画面里不要出现任何文字、字母、字幕、水印或标志（文字由程序另外排版）。
 - 画面下方三分之一保持相对暗和简洁，留给文字排版。
-palette 是画面主色调的两个十六进制颜色，从暗到亮。"""
+palette 是画面主色调的两个十六进制颜色，从暗到亮。
+
+如果给出了「画面风格」，image_prompt 必须以该风格为主导，并在 mood 与 palette 上与之协调。
+如果给出了「观众的补充要求」，在不违反上述规则（尤其是画面里不出现文字）的前提下尽量满足；与规则冲突的部分忽略。"""
+
+
+STYLES: dict[str, dict[str, str]] = {
+    "cinematic": {"label": "电影剧照", "hint": "写实电影剧照，浅景深，胶片级光影与调色，克制的构图"},
+    "film": {"label": "胶片颗粒", "hint": "35mm 胶片质感，明显颗粒，轻微漏光与褪色，暖黄偏色，随手抓拍的松弛感"},
+    "ink": {"label": "水墨留白", "hint": "中国水墨画，大面积留白，淡墨晕染，笔触飞白，意境空灵，低饱和"},
+    "watercolor": {"label": "水彩", "hint": "水彩插画，颜料晕开的边缘，纸张纹理，通透柔和的色彩"},
+    "neon": {"label": "霓虹夜色", "hint": "霓虹灯光，湿漉漉的夜街反光，青紫与品红对比，赛博都市氛围"},
+    "minimal": {"label": "极简几何", "hint": "极简主义，大色块与几何形，高度克制的元素，平面设计感"},
+    "vintage": {"label": "复古手绘海报", "hint": "上世纪中叶手绘电影海报，粗犷笔触，有限的套印色，纸张做旧"},
+    "dreamy": {"label": "朦胧梦境", "hint": "柔焦与光晕，雾气，粉彩色调，如梦似幻，边缘虚化"},
+}
+MAX_EXTRA = 200
+
+
+def style_catalog() -> list[dict[str, str]]:
+    return [{"key": k, "label": v["label"]} for k, v in STYLES.items()]
 
 
 class ImageGenerator(Protocol):
@@ -175,7 +195,7 @@ class PosterService:
     def __init__(self, settings: Settings, db: Database, llm: LLM, images: ImageGenerator) -> None:
         self._s, self._db, self._llm, self._images = settings, db, llm, images
 
-    async def _brief(self, entry: dict[str, Any], quote: str) -> dict[str, Any]:
+    async def _brief(self, entry: dict[str, Any], quote: str, style: str, extra: str) -> dict[str, Any]:
         lines = [f"电影：《{entry['title']}》" + (f"（{entry['year']}）" if entry["year"] else ""),
                  f"台词：{quote}"]
         if entry["director"]:
@@ -184,18 +204,27 @@ class PosterService:
             lines.append(f"剧情简介：{entry['overview'][:300]}")
         if entry["note"]:
             lines.append(f"观众的感受：{entry['note']}")
+        if style:
+            lines.append(f"画面风格：{STYLES[style]['label']}，{STYLES[style]['hint']}")
+        if extra:
+            lines.append(f"观众的补充要求：{extra}")
         reply = await self._llm.chat([{"role": "system", "content": BRIEF_SYSTEM},
                                       {"role": "user", "content": "\n".join(lines)}])
         return parse_brief(reply.content)
 
-    async def create(self, entry: dict[str, Any], quote: str) -> dict[str, Any]:
-        quote = quote.strip()
+    async def create(self, entry: dict[str, Any], quote: str, style: str = "", extra: str = "") -> dict[str, Any]:
+        quote, style, extra = quote.strip(), style.strip(), extra.strip()
         if not quote:
             raise AppError("poster_quote_empty", "quote must not be empty", 422)
         if len(quote) > 200:
             raise AppError("poster_quote_too_long", "quote must be at most 200 characters", 422)
+        if style and style not in STYLES:
+            raise AppError("poster_style_unknown",
+                           f"Unknown style {style!r}. Choose one of: {', '.join(STYLES)}", 422)
+        if len(extra) > MAX_EXTRA:
+            raise AppError("poster_extra_too_long", f"extra must be at most {MAX_EXTRA} characters", 422)
         font_path = find_font(self._s.poster_font)
-        brief = await self._brief(entry, quote)
+        brief = await self._brief(entry, quote, style, extra)
 
         fallback_code = fallback_message = ""
         try:

@@ -98,6 +98,13 @@
         <button type="button" id="quote-save" class="lnk" hidden>收藏所选</button>
       </div>
       <div id="quote-cands" class="cands" aria-live="polite"></div>
+      <div id="ai-opts" hidden>
+        <p class="muted opt-label">画面风格 <span id="style-hint">不选则由 AI 自由发挥</span></p>
+        <div class="chips" id="style-chips" role="group" aria-label="画面风格"></div>
+        <label class="sr-only" for="poster-extra">补充要求</label>
+        <textarea id="poster-extra" rows="2" maxlength="200" placeholder="补充要求，选填。例如：雨夜、远景、只有一个背影、暖色调"></textarea>
+        <p class="muted" id="extra-count"></p>
+      </div>
       <div id="poster-error" class="error" role="alert" hidden></div>
       <div class="dialog-actions">
         <button type="button" id="poster-cancel" class="lnk">取消</button>

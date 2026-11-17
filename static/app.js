@@ -813,7 +813,7 @@ async function onClear() {
 
 /* ---------- poster dialog ---------- */
 /* ---------- poster dialog: pick quotes, then collage or AI ---------- */
-const PQ = { entryId: null, mode: "collage", groups: [], looked: false };
+const PQ = { entryId: null, mode: "collage", groups: [], looked: false, style: "", styles: null };
 const quoteLines = () => $("poster-quote").value.split("\n").map((s) => s.trim()).filter(Boolean);
 const quoteLimit = () => (PQ.mode === "collage" ? 4 : 1);
 
@@ -822,7 +822,25 @@ function setPosterMode(mode) {
   clearError($("poster-error"));
   document.querySelectorAll(".modes button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
   $("poster-submit").textContent = mode === "collage" ? "拼贴生成" : "AI 生成";
+  $("ai-opts").hidden = mode !== "ai";
+  if (mode === "ai") loadStyles();
   syncQuotePicks();
+}
+function pickStyle(key) {
+  PQ.style = key;
+  document.querySelectorAll("#style-chips button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.style === PQ.style)));
+}
+async function loadStyles() {
+  if (PQ.styles) return;
+  try {
+    PQ.styles = (await api("GET", "/api/poster-styles")).styles;
+  } catch (err) {
+    showError($("poster-error"), err);
+    return;
+  }
+  $("style-chips").replaceChildren(...PQ.styles.map((st) =>
+    el("button", { type: "button", "data-style": st.key, "aria-pressed": "false", onclick: () => pickStyle(PQ.style === st.key ? "" : st.key) }, st.label)));
+  pickStyle(PQ.style || "");
 }
 function syncQuotePicks() {
   const lines = quoteLines(), limit = quoteLimit();
@@ -913,6 +931,9 @@ function openPosterDialog(entry) {
   state.posterEntryId = entry.id;
   $("poster-movie").textContent = `《${entry.title}》`;
   $("poster-quote").value = "";
+  $("poster-extra").value = "";
+  $("extra-count").textContent = "";
+  pickStyle("");
   $("quote-lookup").textContent = "查 Wikiquote 台词";
   $("quote-cands").replaceChildren();
   clearError($("poster-error"));
@@ -938,7 +959,7 @@ async function onPosterSubmit(ev) {
   try {
     const poster = PQ.mode === "collage"
       ? await api("POST", `/api/entries/${state.posterEntryId}/collage`, { quotes })
-      : await api("POST", `/api/entries/${state.posterEntryId}/posters`, { quote: quotes[0] });
+      : await api("POST", `/api/entries/${state.posterEntryId}/posters`, { quote: quotes[0], style: PQ.style, extra: $("poster-extra").value.trim() });
     $("poster-dialog").close();
     renderHero(true);
     if (poster.fallback_code) {
@@ -1279,6 +1300,7 @@ function boot() {
   $("poster-form").addEventListener("submit", onPosterSubmit);
   $("poster-cancel").addEventListener("click", () => $("poster-dialog").close());
   $("poster-quote").addEventListener("input", syncQuotePicks);
+  $("poster-extra").addEventListener("input", () => { $("extra-count").textContent = `${$("poster-extra").value.length} / 200`; });
   $("quote-lookup").addEventListener("click", lookupQuotes);
   $("quote-save").addEventListener("click", saveSelectedQuotes);
   document.querySelectorAll(".modes button").forEach((b) => b.addEventListener("click", () => setPosterMode(b.dataset.mode)));

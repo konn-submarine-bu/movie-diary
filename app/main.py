@@ -18,7 +18,7 @@ from .db import Database
 from .errors import AppError, describe
 from .llm import LLM, OpenAICompatLLM
 from .poems import POETS, PoemService, style_of
-from .posters import ImageGenerator, OpenAICompatImages, PosterService
+from .posters import MAX_EXTRA, ImageGenerator, OpenAICompatImages, PosterService, style_catalog
 from .quotes import Wikiquote
 from .tmdb import TMDB
 from .websearch import WebSearch
@@ -73,6 +73,8 @@ class ChatIn(BaseModel):
 
 class PosterIn(BaseModel):
     quote: str = Field(min_length=1, max_length=200)
+    style: str = ""
+    extra: str = ""
 
 
 class CollageIn(BaseModel):
@@ -236,7 +238,11 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
     # ---- posters -----------------------------------------------------
     @app.post("/api/entries/{entry_id}/posters", status_code=201)
     async def create_poster(entry_id: int, body: PosterIn) -> dict[str, Any]:
-        return await poster_service.create(need_entry(entry_id), body.quote)
+        return await poster_service.create(need_entry(entry_id), body.quote, body.style, body.extra)
+
+    @app.get("/api/poster-styles")
+    def poster_styles() -> dict[str, Any]:
+        return {"styles": style_catalog(), "max_extra": MAX_EXTRA}
 
     @app.post("/api/entries/{entry_id}/collage", status_code=201)
     async def create_collage(entry_id: int, body: CollageIn) -> dict[str, Any]:

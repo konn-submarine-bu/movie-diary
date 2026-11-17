@@ -102,7 +102,8 @@ data/
 | `GET /api/on-this-day?on=YYYY-MM-DD` | 往年同月同日看过的 |
 | `GET /api/chat`、`POST /api/chat`、`DELETE /api/chat` | 全局对话：读取、发送、清空 |
 | `GET/POST/DELETE /api/entries/{id}/chat` | 单片对话 |
-| `POST /api/entries/{id}/posters` | AI 生图海报，body `{"quote": "..."}` |
+| `POST /api/entries/{id}/posters` | AI 生图海报，body `{"quote": "...", "style": "ink", "extra": "..."}`，`style` 和 `extra` 选填，`extra` 最多 200 字 |
+| `GET /api/poster-styles` | 预置的画面风格列表 |
 | `POST /api/entries/{id}/collage` | 剧照拼贴，body `{"quotes": ["...", ...]}`，1 到 4 句 |
 | `GET /api/entries/{id}/quote-candidates` | 从 Wikiquote 查台词候选 |
 | `DELETE /api/posters/{id}` | 删除海报及文件 |
@@ -147,6 +148,7 @@ Agent 不能直接调用剧照拼贴和一键成诗，这两个是界面上的�
 | `stills_not_found` | TMDB 没有可用剧照 |
 | `still_unreachable`、`still_download_failed` | 剧照下载失败，多半是网络或代理拦了 `image.tmdb.org` |
 | `poster_too_many_quotes`、`poster_quote_too_long` | 超出拼贴或 AI 海报的句数、字数上限 |
+| `poster_style_unknown`、`poster_extra_too_long` | 风格不在预置列表里，或补充要求超过 200 字 |
 | `poster_font_missing` | 找不到中文字体，设 `POSTER_FONT` |
 | `search_no_results` | 联网搜索没有结果 |
 | `agent_step_limit` | Agent 工具调用用完了步数 |

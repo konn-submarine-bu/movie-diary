@@ -8,7 +8,7 @@ from .config import Settings
 from .db import Database
 from .errors import AppError, describe
 from .llm import LLM
-from .posters import PosterService
+from .posters import STYLES, PosterService
 from .tmdb import TMDB
 from .websearch import WebSearch
 
@@ -21,6 +21,7 @@ SYSTEM_PROMPT = """你是用户的「电影日记」伙伴，一个懂电影、�
 4. 把微弱的灵感扩展成创作指引：当用户说出一句模糊的感受，给出三个不同方向（短文、摄影、短视频脚本各一个切入点），
    每个方向两三句话，让用户选一个再展开。
 5. 把电影台词做成有氛围感的海报：用户给出台词时调用 make_poster。台词必须是用户给的原话，不要改写。
+   用户提到想要的画面风格或额外要求时，分别填入 style（从可选风格里选最接近的）和 extra（用户原话）。
 6. 维护「想看清单」：用户说想看某部电影、或者你推荐后用户表示想看时，用 add_to_wishlist 放进清单。
    用户说看完了，用 update_diary 把 status 改成 watched。
 7. 收藏台词：用户说出一句想留下的台词时，用 save_quote 收藏，台词必须是原话。
@@ -94,7 +95,9 @@ TOOLS: list[dict[str, Any]] = [
         "description": "把一句电影台词做成有氛围感的海报图片。",
         "parameters": {"type": "object", "properties": {
             "entry_id": {"type": "integer"},
-            "quote": {"type": "string", "description": "用户给出的台词原文"}},
+            "quote": {"type": "string", "description": "用户给出的台词原文"},
+            "style": {"type": "string", "enum": list(STYLES), "description": "可选。用户指定了画面风格时填写"},
+            "extra": {"type": "string", "description": "可选。用户对画面的额外要求，原话即可，200 字内"}},
             "required": ["entry_id", "quote"]}}},
 ]
 
@@ -187,7 +190,7 @@ class Agent:
             entry = db.get_entry(args["entry_id"])
             if entry is None:
                 raise AppError("entry_not_found", f"No diary entry with id {args['entry_id']}", 404)
-            poster = await self._posters.create(entry, args["quote"])
+            poster = await self._posters.create(entry, args["quote"], args.get("style", ""), args.get("extra", ""))
             turn["posters"].append(poster)
             return {"poster_id": poster["id"], "mood": poster["mood"],
                     "used_gradient_fallback": bool(poster["fallback_code"]),
