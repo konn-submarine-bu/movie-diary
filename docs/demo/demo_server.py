@@ -79,6 +79,22 @@ class DemoTMDB(TMDB):
     async def original_title(self, tmdb_id):
         return MOVIES[tmdb_id]["original_title"]
 
+    async def film_info(self, tmdb_id):
+        info = FILM_INFO.get(tmdb_id)
+        if info is None:
+            return await super().film_info(tmdb_id)
+        similar = [{"tmdb_id": t, "title": MOVIES[t]["title"], "year": MOVIES[t]["year"],
+                    "poster_url": MOVIES[t]["poster_url"]} for t in info["similar"]]
+        return {**{k: v for k, v in info.items() if k != "similar"}, "similar": similar}
+
+
+FILM_INFO: dict[int, dict[str, Any]] = {
+    843: {"original_title": "花樣年華", "tagline": "那些消逝了的岁月，仿佛隔着一块积着灰尘的玻璃",
+          "runtime": 98, "countries": ["中国香港", "法国"], "cast": ["梁朝伟", "张曼玉", "潘迪华", "雷凯华"],
+          "keywords": ["婚外情", "邻居", "旗袍", "克制", "六十年代", "吴哥窟"],
+          "ratings": [{"source": "TMDB", "value": "8.1", "votes": 2900}],
+          "similar": [11104, 129]},
+}
 
 DPS_WIKITEXT = """== John Keating ==
 * Carpe diem. Seize the day, boys. Make your lives extraordinary.
@@ -103,6 +119,11 @@ class DemoSearch:
     provider = "demo"
 
     async def search(self, query, limit=5):
+        if "影评" in query:
+            return [{"title": "示例来源 · 《花样年华》影评", "url": "https://example.com/in-the-mood-for-love-review",
+                     "snippet": "全片几乎没有一个直白的表白，所有的感情都藏在擦肩而过的走廊和旗袍的颜色里。"},
+                    {"title": "示例来源 · 《花样年华》长评", "url": "https://example.com/in-the-mood-for-love-essay",
+                     "snippet": "王家卫用遮挡和留白拍欲言又止：门框、墙角、窗帘，人物总是被切掉一半。"}]
         return [{"title": "示例来源 · 《花样年华》结尾解读", "url": "https://example.com/in-the-mood-for-love-ending",
                  "snippet": "周慕云在吴哥窟对着墙洞低语，再用泥土封上。"}]
 
@@ -130,6 +151,27 @@ def build_scripts() -> list[tuple[str, list[tuple[str, Any]]]]:
     ]
 
 
+# 单片页：整理印象和输入补全的演示脚本。整理按对话里出现的关键词，一轮一批。
+SUMMARY_BATCHES = [
+    ("走廊", [
+        {"op": "add", "kind": "feel", "short": "擦肩而过，什么都没说", "text": "最难受的是两个人明明都懂，却一直没有说破。"},
+        {"op": "add", "kind": "word", "short": "克制"},
+    ]),
+    ("重看", [
+        {"op": "add", "kind": "one", "short": "爱情藏在没说出口的话里", "text": "爱情不在表白里，在那些没说出口的话里。"},
+        {"op": "add", "kind": "rate", "short": "重看一次，更重了", "stars": 5},
+        {"op": "add", "kind": "idea", "short": "写两个人擦肩的短篇", "text": "想写一个关于两个人在走廊里擦肩而过的短篇。"},
+    ]),
+]
+
+HINTS = {
+    "走廊": {"continuations": [
+        {"label": "续写", "text": "他们都在等对方先开口，可谁也没有。"},
+        {"label": "换个角度", "text": "更像是一种体面，不愿越过那条线。"},
+        {"label": "更抒情", "text": "像隔着一层玻璃，看得见，碰不到。"}],
+        "words": ["隐忍", "体面", "欲言又止", "心照不宣"]},
+}
+
 POEMS = {
     "戴望舒": "旗袍与雨\n\n雨落在窄窄的楼梯\n像一句没说完的话\n旗袍的蓝，是一盏\n迟迟不肯熄灭的灯\n\n"
               "我们交换了钥匙和沉默\n走廊的尽头\n有人把秘密\n折进潮湿的夜里",
@@ -143,7 +185,26 @@ class DemoLLM:
         self.scripts = build_scripts()
         self.n = 0
 
+    def _summary(self, messages) -> ChatReply:
+        body = messages[-1]["content"]
+        ops = []
+        for key, batch in SUMMARY_BATCHES:
+            fresh = [line for line in body.splitlines() if "[新]" in line and key in line]
+            if fresh:
+                src = [int(fresh[-1].split()[0][1:])]
+                ops = [{**op, "source_msg_ids": src} for op in batch]
+                break
+        return ChatReply(content=json.dumps({"impressions": ops}, ensure_ascii=False))
+
     async def chat(self, messages, tools=None):
+        if tools is None and "小气泡" in messages[0]["content"]:
+            return self._summary(messages)
+        if tools is None and "写到一半" in messages[0]["content"]:
+            draft = messages[-1]["content"]
+            for key, hint in HINTS.items():
+                if key in draft:
+                    return ChatReply(content=json.dumps(hint, ensure_ascii=False))
+            return ChatReply(content=json.dumps({"continuations": [], "words": []}))
         if tools is None:
             system = messages[0]["content"]
             for name, poem in POEMS.items():
@@ -152,6 +213,14 @@ class DemoLLM:
             return ChatReply(content="夜\n\n一行\n两行")
         last_user = max(i for i, m in enumerate(messages) if m["role"] == "user")
         text = messages[last_user]["content"]
+        for key, reply in MOVIE_CHAT:
+            if key in text:
+                step = sum(1 for m in messages[last_user + 1:] if m["role"] == "tool")
+                if reply.get("choices") and step == 0:
+                    self.n += 1
+                    return ChatReply(tool_calls=[ToolCall(id=f"call_{self.n}", name="offer_choices",
+                                                          arguments=json.dumps({"choices": reply["choices"]}, ensure_ascii=False))])
+                return ChatReply(content=reply["text"])
         step = sum(1 for m in messages[last_user + 1:] if m["role"] == "tool")
         for key, steps in self.scripts:
             if key in text and step < len(steps):
@@ -163,6 +232,13 @@ class DemoLLM:
                 return ChatReply(tool_calls=[ToolCall(id=f"call_{self.n}", name=name,
                                                       arguments=json.dumps(args, ensure_ascii=False))])
         return ChatReply(content="（演示环境没有为这句话准备回复。）")
+
+
+MOVIE_CHAT = [
+    ("走廊", {"text": "走廊那场，两个人侧身而过，什么都没说，却什么都在了。你觉得他们当时是想说，还是不想说？",
+              "choices": ["想说，说不出口", "不想说破", "说不清，都有"]}),
+    ("重看", {"text": "重看一遍，往往会发现第一次漏掉的东西。这一次，哪个细节让你停下来了？"}),
+]
 
 
 def seed(client: TestClient) -> None:

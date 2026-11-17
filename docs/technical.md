@@ -218,13 +218,13 @@ README 里的动画由脚本从真实界面录制，不是手工拼的。
 
 ```bash
 node docs/demo/record.mjs            # 录全部场景
-node docs/demo/record.mjs poem       # 只录一个：calendar、add-rate、agent-chat、wishlist、quote-collage、poem
+node docs/demo/record.mjs poem       # 只录一个：calendar、add-rate、agent-chat、movie-page、wishlist、quote-collage、poem
 ```
 
-需要 Edge 或 Chrome（路径不同时用环境变量 `BROWSER` 指定）、`ffmpeg`，以及已装好项目依赖的 `python3`。
+需要 Edge 或 Chrome（路径不同时用环境变量 `BROWSER` 指定）、`ffmpeg`，以及已装好项目依赖的 `python3`。`python3` 不是装了依赖的那个时，用环境变量 `PYTHON` 指定。
 
 - 每个场景启动一个**独立的演示后端**（[docs/demo/demo_server.py](demo/demo_server.py)）和临时数据目录，录完即删，**不会碰你真实的日记**。
-- 演示后端用的是真实的前端和真实的接口，只把模型、TMDB 查询、搜索和 Wikiquote 换成脚本化的替身。因此录制不需要任何密钥，也不消耗额度。
+- 演示后端用的是真实的前端和真实的接口，只把模型、TMDB 查询、搜索和 Wikiquote 换成脚本化的替身。单片页的整理印象、输入补全和快捷回答，也由演示后端按对话里的关键词返回事先写好的内容，所以动画里的气泡不代表真实模型的效果。因此录制不需要任何密钥，也不消耗额度。
 - 封面和剧照用的是 TMDB 的真实图片地址，存在 [docs/demo/tmdb_fixture.json](demo/tmdb_fixture.json)。所以录制时本机必须能访问 `image.tmdb.org`，访问不到时脚本会在开头报错，不会录出一堆空封面。
 - 动画和示例海报里出现的电影海报和剧照，版权属于各自的片方，仅用于演示本工具的界面。
 - 每个场景结束时会用接口核对结果（比如“电影已入库、4 星、有感受”），核对不过就报错，不会输出一张看着对、数据不对的动画。

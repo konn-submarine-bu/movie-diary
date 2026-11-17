@@ -181,6 +181,41 @@ const SCENES = {
     must(all.some((x) => x.title === "盗梦空间" && x.rating === 4), "盗梦空间 added by the agent with 4 stars");
     must(await p.ev(`!!document.querySelector("#messages .sources a")`), "web answer shows source links");
   },
+  async "movie-page"(p) {
+    await p.cap("点「聊聊这部」，进入这部电影自己的页面");
+    await p.click(day(6), 900);
+    await p.click(btn("#hero", "聊聊这部 →"), 1200);
+    await ready(p, "#mp-bubbles .mp-bub", "impression bubbles");
+    await p.hold(1800);
+    await p.cap("左边是电影信息，网络评价附来源；右边是印象之海");
+    await p.click(btn("#mp-film .mp-tabs", "相似电影"), 1300);
+    await p.click(btn("#mp-film .mp-tabs", "网络评价"), 900);
+    await p.cap("写感受时，输入框会帮你接着写");
+    await p.type(sel("#mp-inp"), "走廊那场，", 90);
+    await waitFor(() => p.ev(`!document.querySelector("#mp-sug").hidden`), "completion suggestions", 15000);
+    await p.hold(1400);
+    await p.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });
+    await p.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 });
+    await p.hold(900);
+    await p.click(sel("#mp-send"), 500);
+    await p.idle(20000);
+    await p.cap("追问有几个常见答案时，直接给成按钮");
+    await p.hold(1500);
+    await p.cap("聊完，Agent 把你说的话整理成气泡，等你确认");
+    await waitFor(() => p.ev(`document.querySelectorAll("#mp-bubbles .mp-bub.draft").length >= 1`), "new draft bubbles", 30000);
+    await p.hold(2600);
+    await p.cap("点开一个，可以采纳、编辑或驳回，还能回看依据的那一轮");
+    await p.click(`document.querySelector("#mp-bubbles .mp-k-feel .in")`, 1400);
+    await p.click(btn("#mp-pop", "采纳"), 1500);
+    await p.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await p.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await p.hold(700);
+    await p.click(`document.querySelector("#mp-bubbles .mp-k-word .in")`, 1000);
+    await p.click(btn("#mp-pop", "驳回"), 2000);
+    const imps = (await api(p, "/api/entries/2/impressions")).impressions;
+    must(imps.some((i) => i.kind === "feel" && i.status === "ok"), "feel bubble adopted");
+    must(imps.some((i) => i.kind === "word" && i.status === "rej"), "word bubble rejected");
+  },
   async wishlist(p) {
     await p.cap("看到想看的片，先放进「想看」");
     await p.type(sel("#search-input"), "沙丘");
@@ -249,7 +284,7 @@ const SCENES = {
 
 async function runScene(name, port) {
   const data = fs.mkdtempSync(path.join(os.tmpdir(), "md-demo-"));
-  const srv = spawn("python3", [path.join(HERE, "demo_server.py"), "--port", String(port), "--data", data], { cwd: ROOT, stdio: "inherit" });
+  const srv = spawn(process.env.PYTHON || "python3", [path.join(HERE, "demo_server.py"), "--port", String(port), "--data", data], { cwd: ROOT, stdio: "inherit" });
   const prof = fs.mkdtempSync(path.join(os.tmpdir(), "md-prof-"));
   const br = spawn(BROWSER, ["--headless=new", "--disable-gpu", `--remote-debugging-port=${port + 100}`, `--window-size=${W},${H}`,
     "--hide-scrollbars", "--force-device-scale-factor=1", `--user-data-dir=${prof}`, "about:blank"], { stdio: "ignore" });
