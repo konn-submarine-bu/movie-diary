@@ -108,6 +108,8 @@ data/
 | `GET /api/on-this-day?on=YYYY-MM-DD` | 往年同月同日看过的 |
 | `GET /api/chat`、`POST /api/chat`、`DELETE /api/chat` | 全局对话：读取、发送、清空 |
 | `GET/POST/DELETE /api/entries/{id}/chat` | 单片对话。发送后的回复里带 `user_message`，助手消息的 `meta.choices` 是可点选的快捷回答 |
+| `GET /api/personas` | 四位角色：`key`、`name`、`role`、`tagline`、`hue`（提示词不对外） |
+| `POST /api/entries/{id}/impressions/from-message` | 把一条角色的回答引用为已采纳的「灵感」气泡，body `{"message_id": 12, "short": ""}`，`short` 留空则取原文开头。气泡的 `source_persona` 记录是哪位角色 |
 | `GET /api/entries/{id}/impressions` | 印象气泡列表。第一次访问时，把已有的 `note` 和 `rating` 生成为「已校准」的气泡 |
 | `POST /api/entries/{id}/impressions` | 用户自己补充一个气泡，body `{"short": "...", "text": "..."}`，直接是已采纳 |
 | `PATCH /api/impressions/{id}` | 改状态、文字、星级、位置。改了文字或星级会自动变成「已校准」 |
@@ -165,6 +167,8 @@ Agent 不能直接调用剧照拼贴和一键成诗，这两个是界面上的�
 | `poster_too_many_quotes`、`poster_quote_too_long` | 超出拼贴或 AI 海报的句数、字数上限 |
 | `impression_not_found` | 没有这个印象气泡 |
 | `impression_short_empty`、`impression_stars_required` | 气泡短句为空，或已采纳的评价气泡没有星级 |
+| `message_not_quotable` | 要引用的消息不存在、不属于这部电影，或不是助手发的 |
+| `message_already_quoted` | 这条消息已经在印象之海里了 |
 | `impression_summary_invalid` | LLM 整理印象时两次都没返回可解析的 JSON |
 | `compose_hints_invalid` | LLM 返回的补全建议无法解析 |
 | `film_info_unavailable` | 这部电影没有 TMDB 编号，没有更多信息可显示 |
@@ -189,6 +193,7 @@ app/
 ├── quotes.py      Wikiquote 台词查询与解析
 ├── poems.py       22 位诗人与成诗
 ├── clips.py       台词与截图的校验和存储
+├── personas.py    单片页的四位角色：提示词、@ 解析、按顺序回答
 ├── impressions.py 单片页的印象整理：提示词、解析、锁定规则
 ├── filmpage.py    单片页的电影信息缓存、影评搜索、输入补全
 ├── llmjson.py     从 LLM 回复里取出 JSON
@@ -352,6 +357,16 @@ Agent 的行为由[系统提示](../app/agent.py)约束：
 - 在对话里说“我想看……”，Agent 会放进清单；说“看完了”，它把状态改回 watched。
 - 没有标日期的电影列在日历下方的“N 部没有标日期”里。
 - “去年今天”只显示往年同月同日看过的已看条目，没有时不显示。
+
+### 角色（@名字）
+
+- 只在单片对话里生效。全局对话里的 @ 当普通文字。
+- 消息里出现 `@阿焦`、`@陆长镜`、`@小满`、`@宋不然`（全角的 `＠` 也认）就走角色，不再调用主 Agent；每位角色每轮最多回答一次，顺序是 @ 第一次出现的先后。
+- 每位角色单独调用一次 LLM，不带工具、不联网。后一位能看到本轮前面角色说了什么。
+- 角色的回答存在同一份对话记录里，`meta.persona` 是角色的 `key`。喂给 LLM 的历史里，角色的话带 `【名字】` 前缀，所以主 Agent 和其他角色分得清是谁说的。
+- 整理印象时，角色和助手的话只当背景，不当作用户说的话提炼。要留下，用「引用为灵感」。
+- 一轮里有任何一位角色返回空内容，整轮回滚，什么都不保存，返回 `llm_empty_response`。
+- 同一条消息只能引用一次；对应气泡被驳回后可以再引用。
 
 ### 对话范围
 

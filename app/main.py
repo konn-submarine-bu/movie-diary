@@ -19,6 +19,7 @@ from .filmpage import FilmPage
 from .impressions import ImpressionService
 from .errors import AppError, describe
 from .llm import LLM, OpenAICompatLLM
+from .personas import PersonaService, mentioned, name_of, public as public_personas
 from .poems import POETS, PoemService, style_of
 from .posters import MAX_EXTRA, ImageGenerator, OpenAICompatImages, PosterService, style_catalog
 from .quotes import Wikiquote
@@ -93,6 +94,11 @@ class ImpressionPatch(BaseModel):
     pos_y: float | None = Field(default=None, ge=0, le=1)
 
 
+class QuoteIn(BaseModel):
+    message_id: int
+    short: str = Field(default="", max_length=40)
+
+
 class HintIn(BaseModel):
     draft: str = Field(min_length=1, max_length=1000)
 
@@ -117,6 +123,7 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
     agent = Agent(settings, db, llm, tmdb, search, poster_service)
     poem_service = PoemService(llm, db)
     impression_service = ImpressionService(db, llm)
+    persona_service = PersonaService(db, llm)
     film_page = FilmPage(db, tmdb, search, llm)
     collage_service = CollageService(settings, db, tmdb)
     wikiquote = wikiquote or Wikiquote()
@@ -245,8 +252,17 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
 
     @app.post("/api/entries/{entry_id}/chat")
     async def entry_chat(entry_id: int, body: ChatIn) -> dict[str, Any]:
-        need_entry(entry_id)
+        entry = need_entry(entry_id)
+        called = mentioned(body.message)
+        if called:
+            if not body.message.strip():
+                raise AppError("message_empty", "message must not be empty", 422)
+            return await persona_service.reply(entry, body.message, called)
         return await agent.reply(entry_id, body.message)
+
+    @app.get("/api/personas")
+    def personas() -> dict[str, Any]:
+        return {"personas": public_personas()}
 
     @app.delete("/api/chat", status_code=204)
     def clear_global_chat() -> None:
@@ -274,6 +290,23 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
         need_entry(entry_id)
         imp, entry = db.add_impression(entry_id, "mine", body.short.strip(), body.text.strip(), status="ok")
         return {"impression": imp, "entry": entry}
+
+    @app.post("/api/entries/{entry_id}/impressions/from-message", status_code=201)
+    def quote_message(entry_id: int, body: QuoteIn) -> dict[str, Any]:
+        entry = need_entry(entry_id)
+        msg = db.get_message(body.message_id)
+        if msg is None or msg["entry_id"] != entry_id or msg["role"] != "assistant":
+            raise AppError("message_not_quotable", f"Entry {entry_id} has no assistant message {body.message_id}", 404)
+        db.seed_impressions(entry)
+        if any(i["source_msg_ids"] == [msg["id"]] and i["kind"] == "idea" and i["status"] != "rej"
+               for i in db.list_impressions(entry_id)):
+            raise AppError("message_already_quoted", f"Message {msg['id']} is already in the impression sea", 409)
+        text = msg["content"].strip()[:600]
+        short = body.short.strip() or (text if len(text) <= 40 else text[:39] + "…")
+        persona = msg["meta"].get("persona", "")
+        imp, _ = db.add_impression(entry_id, "idea", short, text, status="ok", source_msg_ids=[msg["id"]],
+                                   source_persona=persona if name_of(persona) else "")
+        return {"impression": imp}
 
     @app.patch("/api/impressions/{imp_id}")
     def patch_impression(imp_id: int, body: ImpressionPatch) -> dict[str, Any]:

@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS impressions (
   stars INTEGER CHECK (stars IS NULL OR stars BETWEEN 1 AND 5),
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'ok', 'edit', 'rej')),
   source_msg_ids TEXT NOT NULL DEFAULT '[]',
+  source_persona TEXT NOT NULL DEFAULT '',
   pos_x REAL,
   pos_y REAL,
   created_at TEXT NOT NULL,
@@ -157,6 +158,8 @@ class Database:
             if "status" not in cols:  # databases created before the wishlist existed
                 conn.execute("ALTER TABLE entries ADD COLUMN status TEXT NOT NULL DEFAULT 'watched'"
                              " CHECK (status IN ('watched', 'wishlist'))")
+            if "source_persona" not in {r["name"] for r in conn.execute("PRAGMA table_info(impressions)")}:
+                conn.execute("ALTER TABLE impressions ADD COLUMN source_persona TEXT NOT NULL DEFAULT ''")
 
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Connection]:
@@ -332,6 +335,11 @@ class Database:
             row = conn.execute("SELECT * FROM messages WHERE id = ?", (cur.lastrowid,)).fetchone()
         return _message(row)
 
+    def get_message(self, message_id: int) -> dict[str, Any] | None:
+        with self._tx() as conn:
+            row = conn.execute("SELECT * FROM messages WHERE id = ?", (message_id,)).fetchone()
+        return _message(row) if row else None
+
     def list_messages(self, entry_id: int | None, limit: int = 200) -> list[dict[str, Any]]:
         with self._tx() as conn:
             rows = conn.execute(
@@ -407,16 +415,18 @@ class Database:
 
     def add_impression(self, entry_id: int, kind: str, short: str, text: str = "", stars: int | None = None,
                        status: str = "draft", source_msg_ids: list[int] | None = None,
-                       pos: tuple[float, float] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+                       pos: tuple[float, float] | None = None,
+                       source_persona: str = "") -> tuple[dict[str, Any], dict[str, Any]]:
         if kind == "rate" and status in ACTIVE and not stars:
             raise AppError("impression_stars_required", "an adopted rating bubble needs stars from 1 to 5", 422)
         stamp = now_iso()
         with self._tx() as conn:
             cur = conn.execute(
-                "INSERT INTO impressions (entry_id, kind, short, text, stars, status, source_msg_ids, pos_x, pos_y,"
-                " created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO impressions (entry_id, kind, short, text, stars, status, source_msg_ids, source_persona,"
+                " pos_x, pos_y, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (entry_id, kind, short, text, stars if kind == "rate" else None, status,
-                 json.dumps(source_msg_ids or []), pos[0] if pos else None, pos[1] if pos else None, stamp, stamp))
+                 json.dumps(source_msg_ids or []), source_persona, pos[0] if pos else None,
+                 pos[1] if pos else None, stamp, stamp))
             after = _impression(conn.execute("SELECT * FROM impressions WHERE id = ?", (cur.lastrowid,)).fetchone())
             self._sync_entry(conn, {**after, "status": "rej"}, after)
             after = _impression(conn.execute("SELECT * FROM impressions WHERE id = ?", (cur.lastrowid,)).fetchone())

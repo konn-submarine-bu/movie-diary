@@ -8,6 +8,7 @@ from .config import Settings
 from .db import Database
 from .errors import AppError, describe
 from .llm import LLM
+from .personas import history_for_llm
 from .posters import STYLES, PosterService
 from .tmdb import TMDB
 from .websearch import WebSearch
@@ -31,6 +32,8 @@ SYSTEM_PROMPT = """你是用户的「电影日记」伙伴，一个懂电影、�
 工具使用规则：
 - 用户提到某部电影但日记里没有时，先 search_movie 确认是哪一部，再用 add_to_diary 记录（评分和感受以用户说的为准，没说就留空）。
 - 用户表达了对某部已记录电影的感受时，用 update_diary 写入 note（保留用户原话的味道）。
+- 单片对话里，带【名字】前缀的发言来自用户请来的其他角色（阿焦、陆长镜、小满、宋不然）。可以参考，但那不是用户的感受，
+  也不要替他们写进日记；你自己的回答不要加这种前缀。
 - 工具返回 error 时，把 error_code 和原因如实告诉用户，不要假装成功。
 - 用中文回答，语气自然简洁，不使用 emoji。"""
 
@@ -248,8 +251,7 @@ class Agent:
         if not text:
             raise AppError("message_empty", "message must not be empty", 422)
         system = f"{SYSTEM_PROMPT}\n\n{self._context(entry_id)}"
-        history = [{"role": m["role"], "content": m["content"]}
-                   for m in self._db.list_messages(entry_id, 40)]
+        history = history_for_llm(self._db.list_messages(entry_id, 40))
         messages: list[dict[str, Any]] = [{"role": "system", "content": system}, *history,
                                           {"role": "user", "content": text}]
         turn: dict[str, Any] = {"sources": [], "posters": [], "tools": [], "changed": False, "choices": []}

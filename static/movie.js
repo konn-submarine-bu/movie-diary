@@ -26,6 +26,9 @@
   const mp = $("mp"), film = $("mp-film"), msgs = $("mp-msgs"), inp = $("mp-inp"), ghost = $("mp-ghost"), sug = $("mp-sug");
   const wrap = $("mp-seawrap"), layer = $("mp-bubbles"), pop = $("mp-pop"), seaErr = $("mp-sea-error"), chatErr = $("mp-chat-error");
   const sendBtn = $("mp-send");
+  const PERSONA = {};
+  const UNKNOWN_PERSONA = { name: "角色", role: "", hue: 200 };
+  let personaReady = null;
   const fill = (node, ...kids) => node.replaceChildren(...kids.filter((x) => x != null && x !== false));
   const alive = (tok) => P.open && tok === P.tok;
 
@@ -293,11 +296,57 @@
   function glowBubbles(id, on) {
     P.bubbles.forEach((b) => { if ((b.d.source_msg_ids || []).includes(Number(id))) b.el.classList.toggle("glow", on); });
   }
+  function loadPersonas() {
+    if (!personaReady) {
+      personaReady = api("GET", "/api/personas").then(({ personas }) => {
+        personas.forEach((p) => { PERSONA[p.key] = p; });
+        buildSummon(personas);
+      }).catch(() => { personaReady = null; });
+    }
+    return personaReady;
+  }
+  function buildSummon(personas) {
+    const box = $("mp-summon");
+    box.replaceChildren(el("span", { class: "lab" }, "请来聊聊"), ...personas.map((p) => {
+      const b = el("button", { type: "button", title: p.tagline, "aria-label": `请${p.name}（${p.role}）来聊聊` }, p.name, el("small", {}, p.role));
+      b.style.setProperty("--ph", p.hue);
+      b.addEventListener("click", () => {
+        const sep = inp.value && !/\s$/.test(inp.value) ? " " : "";
+        inp.value = `${inp.value}${sep}@${p.name} `;
+        autosize(); inp.focus();
+        inp.setSelectionRange(inp.value.length, inp.value.length);
+        scheduleHints();
+      });
+      return b;
+    }));
+    box.hidden = false;
+  }
+  const calledIn = (t) => Object.values(PERSONA).filter((p) => t.includes(`@${p.name}`) || t.includes(`＠${p.name}`));
+  function tagPersona(node, p) {
+    node.dataset.who = p.role ? `${p.name} · ${p.role}` : p.name;
+    node.style.setProperty("--ph", p.hue);
+  }
+  async function quoteMsg(node, btn) {
+    const tok = P.tok;
+    btn.disabled = true;
+    clearError(chatErr);
+    try {
+      await write("POST", `/api/entries/${P.id}/impressions/from-message`, { message_id: Number(node.dataset.id) });
+      btn.textContent = "已放进印象之海";
+      if (alive(tok)) loadImpressions(tok);
+    } catch (err) {
+      if (!alive(tok)) return;
+      if (err.code === "message_already_quoted") btn.textContent = "已在印象之海";
+      else { btn.disabled = false; showError(chatErr, err); }
+    }
+  }
   function addMsg(m, animate) {
     msgs.querySelector(".mp-empty")?.remove();
     const ai = m.role === "assistant";
     const node = el("div", { class: `mp-m ${ai ? "ai" : "me"}` });
     if (m.id != null) node.dataset.id = m.id;
+    const personaKey = ai && m.meta && m.meta.persona;
+    if (personaKey) tagPersona(node, PERSONA[personaKey] || UNKNOWN_PERSONA);
     const text = el("span");
     node.append(text);
     if (!ai) text.textContent = m.content;
@@ -314,6 +363,11 @@
       node.append(el("div", { class: "mp-asks" }, ...choices.map((c) => el("button", {
         type: "button", onclick: () => { inp.value = `${c}，`; autosize(); inp.focus(); scheduleHints(); },
       }, c))));
+    }
+    if (personaKey) {
+      const q = el("button", { type: "button", class: "quote", title: "把这句话放进印象之海，作为你的灵感" }, "引用为灵感");
+      q.addEventListener("click", () => quoteMsg(node, q));
+      node.append(q);
     }
     node.addEventListener("mouseenter", () => glowBubbles(node.dataset.id, true));
     node.addEventListener("mouseleave", () => glowBubbles(node.dataset.id, false));
@@ -332,6 +386,7 @@
   }
   async function loadChat(tok) {
     try {
+      await loadPersonas();
       const { messages } = await api("GET", `/api/entries/${P.id}/chat`);
       if (!alive(tok)) return;
       msgs.replaceChildren();
@@ -360,14 +415,16 @@
     clearError(chatErr); clearHints();
     const mine = addMsg({ role: "user", content: text }, false);
     inp.value = ""; autosize();
-    const pending = el("div", { class: "mp-m ai pending" }, "正在思考…");
+    const called = calledIn(text);
+    const pending = el("div", { class: "mp-m ai pending" }, called.length ? `${called.map((p) => p.name).join("、")}正在想…` : "正在思考…");
+    if (called.length) tagPersona(pending, called[0]);
     msgs.append(pending);
     scrollEnd();
     try {
       const res = await api("POST", `/api/entries/${P.id}/chat`, { message: text });
       if (!alive(tok)) return;
       pending.remove();
-      addMsg(res.message, true);
+      (res.messages || [res.message]).forEach((m) => addMsg(m, true));
       if (res.diary_changed) { await loadEntries(); P.dirty = true; if (alive(tok)) { P.entry = entryById(P.id) || P.entry; renderStrip(); renderCal(); } }
       await syncIds(tok);
       refreshImpressions();
@@ -707,12 +764,16 @@
     });
     const turns = (d.source_msg_ids || []).map((id) => [id, turnLabel(id)]).filter(([, l]) => l);
     const mine = d.kind === "mine";
+    const from = d.source_persona ? (PERSONA[d.source_persona] || UNKNOWN_PERSONA) : null;
+    const fromNode = from ? el("div", { class: "pfrom" }, `来自 ${from.name}${from.role ? `（${from.role}）` : ""}，由你引用`) : null;
+    if (fromNode) fromNode.style.setProperty("--ph", from.hue);
     fill(pop, 
       el("div", { class: "pk" }, el("span", {}, k.label), el("em", { class: `tg ${b.tmp ? "draft" : d.status}` }, b.tmp ? "新的补充" : (STATE[d.status] || d.status))),
       d.kind === "rate" && !b.tmp ? el("div", { class: "pstars" }, ...[1, 2, 3, 4, 5].map((i) => el("button", {
         type: "button", class: i <= (d.stars || 0) ? "on" : "", "aria-label": `${i} 星`, onclick: () => commit(b, { stars: i }),
       }, "★"))) : null,
       pt,
+      fromNode,
       turns.length ? el("div", { class: "ps" }, "依据", ...turns.map(([id, label]) => el("button", { type: "button", onclick: () => jumpTo(id) }, label))) : null,
       el("div", { class: "pa" },
         el("button", { type: "button", class: "y", hidden: b.tmp || d.status !== "draft", onclick: () => commit(b, { status: "ok" }) }, "采纳"),
