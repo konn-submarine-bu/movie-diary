@@ -17,7 +17,7 @@ MAX_TEXT = 2000
 MAX_NOTE = 200
 
 
-def store_image(data: bytes, directory: Path, entry_id: int) -> str:
+def store_image(data: bytes, directory: Path, entry_id: int | str) -> str:
     """Validate, normalize to JPEG and save an uploaded screenshot. Returns the stored filename."""
     if not data:
         raise AppError("image_empty", "The uploaded image is empty", 422)

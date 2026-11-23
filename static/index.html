@@ -21,7 +21,8 @@
         <button type="button" role="tab" aria-selected="true" data-view="cal">日历</button>
         <button type="button" role="tab" aria-selected="false" data-view="list">片单</button>
         <button type="button" role="tab" aria-selected="false" data-view="wish">想看</button>
-        <button type="button" role="tab" aria-selected="false" data-view="clips">收藏</button>
+        <button type="button" role="tab" aria-selected="false" data-view="clips">片中拾句</button>
+        <button type="button" role="tab" aria-selected="false" data-view="pieces">你收藏的</button>
       </nav>
       <div class="search">
         <form id="search-form" role="search">
@@ -78,7 +79,54 @@
 
     <section class="wall" id="wall" aria-label="全部电影"></section>
     <section class="wish" id="wish" aria-label="想看清单"></section>
-    <section class="clipwall" id="clipwall" aria-label="台词与截图收藏"></section>
+    <section class="clipwall" id="clipwall" aria-label="片中拾句：台词、截图与诗"></section>
+
+    <section class="pieces" id="pieces" aria-label="你收藏的">
+      <div class="pc-left">
+        <form class="pc-add" id="pc-form">
+          <div class="pc-modes" role="group" aria-label="收藏类型">
+            <button type="button" data-pcmode="text" aria-pressed="true">粘贴文字</button>
+            <button type="button" data-pcmode="image" aria-pressed="false">上传图片</button>
+          </div>
+          <label class="sr-only" for="pc-text">原文</label>
+          <textarea id="pc-text" rows="4" maxlength="5000" placeholder="把打动你的那段话粘贴在这里：一段知乎回答、一段影评、几句歌词…"></textarea>
+          <div class="pc-drop" id="pc-drop" hidden>
+            <button type="button" id="pc-pick" class="lnk">选择图片</button>
+            <span id="pc-file" class="muted">也可以直接把图片拖到这里，或粘贴截图</span>
+            <img id="pc-preview" alt="" hidden>
+          </div>
+          <div class="chips pc-plats" id="pc-plats" role="group" aria-label="来自哪个平台（可选）"></div>
+          <div class="pc-row">
+            <label class="sr-only" for="pc-title">标题</label>
+            <input id="pc-title" type="text" maxlength="100" placeholder="标题或作者（可选）" autocomplete="off">
+            <label class="sr-only" for="pc-url">链接</label>
+            <input id="pc-url" type="url" maxlength="500" placeholder="链接（可选）" autocomplete="off">
+          </div>
+          <label class="sr-only" for="pc-note">批注</label>
+          <input id="pc-note" type="text" maxlength="500" placeholder="它哪里打动了你？随手写一句（可选）" autocomplete="off">
+          <div id="pc-error" class="error" role="alert" hidden></div>
+          <div class="pc-acts"><button type="submit" id="pc-submit" class="lnk strong">收进来</button></div>
+        </form>
+        <p class="pc-count" id="pc-count"></p>
+        <div class="pc-list" id="pc-list"></div>
+      </div>
+
+      <section class="pc-chat" aria-label="和我聊聊">
+        <div class="chat-head">
+          <span>和我聊聊 · 基于你收藏的文字</span>
+          <span class="chat-tools"><button type="button" id="pc-clear">清空对话</button></span>
+        </div>
+        <div class="pc-msgs" id="pc-msgs" aria-live="polite"></div>
+        <div id="pc-chat-error" class="error" role="alert" hidden></div>
+        <div class="chips" id="pc-sug"></div>
+        <form class="composer" id="pc-chat-form">
+          <label class="sr-only" for="pc-chat-input">输入消息</label>
+          <textarea id="pc-chat-input" rows="1" maxlength="4000" placeholder="想聊哪个话题？或者让我替你说一段"></textarea>
+          <button type="submit" id="pc-send" aria-label="发送">↵</button>
+        </form>
+      </section>
+      <input type="file" id="pc-image" accept="image/*" hidden>
+    </section>
   </div>
 
   <div class="mp" id="mp" aria-label="单片页面">
@@ -216,5 +264,6 @@
 
   <script src="/app.js" defer></script>
   <script src="/movie.js" defer></script>
+  <script src="/pieces.js" defer></script>
 </body>
 </html>

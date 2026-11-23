@@ -368,3 +368,47 @@ body[data-view=clips] .clipwall { display: block; columns: 280px; column-gap: 40
 .cand input { margin-top: .45em; accent-color: var(--accent); }
 .cand input:disabled + span { opacity: .45; }
 .cand em { font-style: normal; font-size: 12px; color: var(--muted); letter-spacing: .06em; }
+
+/* ---- 「你收藏的」 ---- */
+.pieces { display: none; }
+body[data-view=pieces] .main { display: none; }
+body[data-view=pieces] .pieces { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 520px); gap: clamp(36px, 6vw, 96px); align-items: start; padding: 26px 0 80px; }
+.pc-add { display: grid; gap: 14px; max-width: 40em; padding: 18px 20px; border: 1px solid color-mix(in srgb, var(--muted) 22%, transparent); border-radius: 12px; transition: border-color .3s, background .3s; }
+.pc-add.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.pc-modes { display: flex; gap: 22px; font-size: 13px; letter-spacing: .12em; }
+.pc-modes button { color: var(--muted); transition: color .3s; }
+.pc-modes button[aria-pressed=true] { color: var(--accent-text); }
+.pc-add textarea, .pc-add input, .pc-note input {
+  width: 100%; background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--muted) 40%, transparent);
+  color: var(--text); font: inherit; font-size: 14px; line-height: 1.7; padding: 6px 2px; transition: border-color .4s; }
+.pc-add textarea { font-family: var(--serif); font-size: 16px; resize: vertical; }
+.pc-add textarea:focus, .pc-add input:focus, .pc-note input:focus { outline: none; border-color: var(--accent); }
+.pc-add textarea::placeholder, .pc-add input::placeholder { color: var(--muted); }
+.pc-add [hidden] { display: none; }
+.pc-drop { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 18px; border: 1px dashed color-mix(in srgb, var(--muted) 45%, transparent); border-radius: 10px; }
+.pc-drop .muted { margin: 0; }
+.pc-drop img { flex-basis: 100%; max-height: 220px; width: auto; max-width: 100%; object-fit: contain; border-radius: 6px; }
+.pc-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.pc-plats button { font-size: 12px; padding: 3px 10px; }
+.pc-acts { display: flex; justify-content: flex-end; }
+.pc-count { margin: 30px 0 0; font-size: 12px; letter-spacing: .2em; color: var(--muted); }
+.pc-list { columns: 300px; column-gap: 36px; margin-top: 16px; }
+.pc-card { position: relative; break-inside: avoid; margin: 0 0 34px; padding: 4px 30px 4px 18px; border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); animation: rise .8s backwards; animation-delay: calc(var(--i) * 40ms); }
+.pc-card blockquote { margin: 0; font-family: var(--serif); font-size: 17px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; max-height: 16em; overflow-y: auto; scrollbar-width: thin; }
+.pc-card.image img { display: block; width: 100%; border-radius: 4px; cursor: zoom-in; box-shadow: 0 20px 50px -20px rgba(0,0,0,.6); }
+.pc-src { margin: 8px 0 0; font-size: 12px; color: var(--muted); letter-spacing: .06em; }
+.pc-src a { color: var(--accent-text); text-decoration: none; }
+.pc-note { margin: 8px 0 0; font-size: 13px; line-height: 1.7; color: var(--text); opacity: .85; }
+.pc-note b { color: var(--accent-text); font-weight: 500; margin-right: 2px; }
+.pc-note .lnk { font-size: 12px; margin-left: 8px; opacity: .55; }
+.pc-note.empty .lnk { margin-left: 0; }
+.pc-note.editing { display: flex; align-items: center; gap: 10px; opacity: 1; }
+.pc-note.editing .lnk { margin: 0; opacity: 1; white-space: nowrap; }
+.pc-card-acts { margin-top: 6px; }
+.pc-card-acts .lnk { font-size: 12px; opacity: .55; }
+.pc-card:hover .x, .pc-card .x:focus-visible { opacity: 1; }
+.pc-card.image .x { background: color-mix(in srgb, var(--bg) 70%, transparent); top: 4px; right: 4px; }
+.pc-chat { position: sticky; top: 20px; }
+.pc-msgs { height: min(56vh, 560px); overflow-y: auto; display: grid; align-content: start; gap: 14px; padding: 18px 0 8px; scrollbar-width: thin; }
+.pc-msgs .m.u span { white-space: pre-wrap; }
+@media (max-width: 920px) { body[data-view=pieces] .pieces { grid-template-columns: 1fr; } .pc-chat { position: static; } .pc-row { grid-template-columns: 1fr; } }

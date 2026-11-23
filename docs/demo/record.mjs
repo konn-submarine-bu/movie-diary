@@ -267,14 +267,14 @@ const SCENES = {
     await p.hold(700);
     await p.click(sel('#poem-poets button[data-k="dai_wangshu"]'), 400);
     await p.idle(30000); await p.hold(1200);
-    await p.cap("保存下来，之后在「收藏」里翻看");
+    await p.cap("保存下来，之后在「片中拾句」里翻看");
     await p.click(sel("#poem-save"), 900);
     await p.cap("不喜欢就换一位，中外诗人共 22 位");
     await p.click(sel('#poem-poets button[data-k="szymborska"]'), 400);
     await p.hold(300);
     await p.idle(30000); await p.hold(1400);
     await p.click(sel("#poem-close"), 700);
-    await p.cap("收藏页：诗、台词、截图放在一起");
+    await p.cap("片中拾句：诗、台词、截图放在一起");
     await p.click(tab("clips"), 2400);
     const poems = (await api(p, "/api/poems")).poems;
     must(poems.length === 1 && poems[0].style_name === "戴望舒", "exactly one saved poem, by 戴望舒");

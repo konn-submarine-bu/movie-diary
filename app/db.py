@@ -95,6 +95,24 @@ CREATE TABLE IF NOT EXISTS film_info (
   data TEXT NOT NULL,
   fetched_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS pieces (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL CHECK (kind IN ('text', 'image')),
+  text TEXT NOT NULL DEFAULT '',
+  filename TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL DEFAULT '',
+  platform TEXT NOT NULL DEFAULT '',
+  url TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS piece_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  content TEXT NOT NULL,
+  meta TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL
+);
 """
 
 ENTRY_FIELDS = (
@@ -140,6 +158,15 @@ IMPRESSION_PATCH_FIELDS = ("short", "text", "stars", "status", "pos_x", "pos_y")
 def _written(imp: dict[str, Any]) -> Any:
     """The value an adopted impression pushes into its diary entry (note for `one`, rating for `rate`)."""
     return (imp["text"] or imp["short"]) if imp["kind"] == "one" else imp["stars"]
+
+
+def _piece(row: sqlite3.Row) -> dict[str, Any]:
+    d = dict(row)
+    d["image_url"] = f"/media/pieces/{d['filename']}" if d["filename"] else ""
+    return d
+
+
+PIECE_FIELDS = ("kind", "text", "filename", "title", "platform", "url", "note")
 
 
 def _poster(row: sqlite3.Row) -> dict[str, Any]:
@@ -508,6 +535,61 @@ class Database:
             conn.execute("INSERT INTO impression_state (entry_id, last_msg_id) VALUES (?, ?)"
                          " ON CONFLICT(entry_id) DO UPDATE SET last_msg_id = excluded.last_msg_id",
                          (entry_id, msg_id))
+
+    # pieces: texts and images saved from outside the diary (「你收藏的」) ----
+    def add_piece(self, data: dict[str, Any]) -> dict[str, Any]:
+        values = {k: data.get(k, "") for k in PIECE_FIELDS}
+        with self._tx() as conn:
+            cur = conn.execute(
+                "INSERT INTO pieces (kind, text, filename, title, platform, url, note, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (*values.values(), now_iso()))
+            row = conn.execute("SELECT * FROM pieces WHERE id = ?", (cur.lastrowid,)).fetchone()
+        return _piece(row)
+
+    def get_piece(self, piece_id: int) -> dict[str, Any] | None:
+        with self._tx() as conn:
+            row = conn.execute("SELECT * FROM pieces WHERE id = ?", (piece_id,)).fetchone()
+        return _piece(row) if row else None
+
+    def find_piece_text(self, text: str) -> dict[str, Any] | None:
+        with self._tx() as conn:
+            row = conn.execute("SELECT * FROM pieces WHERE kind = 'text' AND text = ?", (text,)).fetchone()
+        return _piece(row) if row else None
+
+    def list_pieces(self) -> list[dict[str, Any]]:
+        with self._tx() as conn:
+            rows = conn.execute("SELECT * FROM pieces ORDER BY id DESC").fetchall()
+        return [_piece(r) for r in rows]
+
+    def update_piece(self, piece_id: int, patch: dict[str, Any]) -> dict[str, Any] | None:
+        values = {k: v for k, v in patch.items() if k in PIECE_FIELDS and k not in ("kind", "filename")}
+        with self._tx() as conn:
+            if values:
+                sets = ", ".join(f"{k} = ?" for k in values)
+                conn.execute(f"UPDATE pieces SET {sets} WHERE id = ?", [*values.values(), piece_id])
+            row = conn.execute("SELECT * FROM pieces WHERE id = ?", (piece_id,)).fetchone()
+        return _piece(row) if row else None
+
+    def delete_piece(self, piece_id: int) -> None:
+        with self._tx() as conn:
+            conn.execute("DELETE FROM pieces WHERE id = ?", (piece_id,))
+
+    def add_piece_message(self, role: str, content: str, meta: dict[str, Any] | None = None) -> dict[str, Any]:
+        with self._tx() as conn:
+            cur = conn.execute("INSERT INTO piece_messages (role, content, meta, created_at) VALUES (?, ?, ?, ?)",
+                               (role, content, json.dumps(meta or {}, ensure_ascii=False), now_iso()))
+            row = conn.execute("SELECT * FROM piece_messages WHERE id = ?", (cur.lastrowid,)).fetchone()
+        return _message(row)
+
+    def list_piece_messages(self, limit: int = 200) -> list[dict[str, Any]]:
+        with self._tx() as conn:
+            rows = conn.execute("SELECT * FROM (SELECT * FROM piece_messages ORDER BY id DESC LIMIT ?) ORDER BY id",
+                                (limit,)).fetchall()
+        return [_message(r) for r in rows]
+
+    def clear_piece_messages(self) -> None:
+        with self._tx() as conn:
+            conn.execute("DELETE FROM piece_messages")
 
     # film info cache ---------------------------------------------------
     def get_film_info(self, tmdb_id: int) -> tuple[dict[str, Any], str] | None:

@@ -69,20 +69,23 @@ python -m uvicorn app.main:app_factory --factory --port 8000
 data/
 ├── diary.sqlite3      日记、对话、海报、收藏、诗，全部在一个 SQLite 文件里
 ├── posters/           台词海报 PNG
-└── clips/             上传的截图 JPEG
+├── clips/             上传的截图 JPEG
+└── pieces/            「你收藏的」里上传的图片 JPEG
 ```
 
-七张表：
+九张表：
 
 | 表 | 内容 |
 |---|---|
 | `entries` | 电影条目：TMDB 编号、片名、年份、导演、简介、类型、评分、感受、标签、观影日期、状态（watched 或 wishlist） |
 | `messages` | 对话。`entry_id` 为空表示全局对话；每条记录附带来源链接和用到的工具 |
 | `posters` | 海报：台词、意境、提示词、文件名，以及生图失败时的降级原因 |
-| `clips` | 收藏的台词和截图 |
+| `clips` | 「片中拾句」里的台词和截图，挂在某部电影上 |
 | `poems` | 保存的诗：诗人、标题、正文 |
 | `impressions` | 单片页的「印象」气泡：类型、短句、全文、状态（待确认 / 已采纳 / 已校准 / 已驳回）、依据的对话编号、用户拖动后的位置 |
 | `film_info` | 单片页的电影信息缓存，按 TMDB 编号存，30 天过期 |
+| `pieces` | 「你收藏的」：类型（text 或 image）、原文、图片文件名、标题、平台、链接、批注。不挂在电影上 |
+| `piece_messages` | 「你收藏的」页面的对话，和 `messages` 分开 |
 
 另有一张内部表 `impression_state`，记录每部电影整理到了第几条消息。
 
@@ -127,6 +130,12 @@ data/
 | `POST /api/entries/{id}/clips` | 收藏台词 |
 | `POST /api/entries/{id}/clips/shot` | 上传截图 |
 | `DELETE /api/clips/{id}` | 删除收藏 |
+| `GET /api/pieces` | 「你收藏的」全部条目（新的在前）和可选平台列表 |
+| `POST /api/pieces` | 存一段文字，body `{"text": "...", "title": "", "platform": "", "url": "", "note": ""}`，只有 `text` 必填 |
+| `POST /api/pieces/image?title=&platform=&url=&note=` | 上传一张图片，请求体是图片本身 |
+| `PATCH /api/pieces/{id}` | 改原文、标题、平台、链接或批注 |
+| `DELETE /api/pieces/{id}` | 删除，图片文件一并删掉 |
+| `GET/POST/DELETE /api/pieces/chat` | 「和我聊聊」：读取、发送、清空。助手消息的 `meta.pieces_seen` 是这次放进提示词的收藏条数 |
 | `GET /api/poem-styles` | 22 位诗人 |
 | `POST /api/entries/{id}/poem` | 写一首诗（不保存） |
 | `POST /api/entries/{id}/poems` | 保存一首诗 |
@@ -193,6 +202,7 @@ app/
 ├── quotes.py      Wikiquote 台词查询与解析
 ├── poems.py       22 位诗人与成诗
 ├── clips.py       台词与截图的校验和存储
+├── pieces.py      「你收藏的」：字段校验、对话提示词
 ├── personas.py    单片页的四位角色：提示词、@ 解析、按顺序回答
 ├── impressions.py 单片页的印象整理：提示词、解析、锁定规则
 ├── filmpage.py    单片页的电影信息缓存、影评搜索、输入补全
@@ -200,7 +210,7 @@ app/
 ├── db.py          SQLite 表结构与读写
 ├── config.py      环境变量
 └── errors.py      统一的错误类型
-static/            前端：index.html、app.js、style.css；单片页是 movie.js 和 movie.css（无构建步骤）
+static/            前端：index.html、app.js、style.css；单片页是 movie.js 和 movie.css，「你收藏的」是 pieces.js（无构建步骤）
 tests/             自动化测试
 docs/demo/         录制动画用的脚本和替身后端
 docs/media/        README 里的动画
@@ -215,7 +225,7 @@ design/            界面设计稿，包括单片页的 mockup-movie-page.html
 python -m pytest -q
 ```
 
-测试用假的 LLM、生图、TMDB、搜索和 Wikiquote，不联网、不花钱，覆盖：日记增删改与想看清单、Agent 工具循环与步数上限、工具报错透传、联网搜索解析、海报生成与降级、剧照拼贴的版式和限制、Wikiquote 解析、收藏与成诗。
+测试用假的 LLM、生图、TMDB、搜索和 Wikiquote，不联网、不花钱，覆盖：日记增删改与想看清单、Agent 工具循环与步数上限、工具报错透传、联网搜索解析、海报生成与降级、剧照拼贴的版式和限制、Wikiquote 解析、收藏与成诗、「你收藏的」的存储与对话。
 
 ## 重新录制动画
 
@@ -336,11 +346,18 @@ Agent 的行为由[系统提示](../app/agent.py)约束：
 
 海报文字需要含中文字形的字体。程序会按顺序找 macOS（冬青黑体、华文黑体、宋体）、Linux（Noto CJK、文泉驿）、Windows（微软雅黑）的系统字体。都找不到会返回 `poster_font_missing`，这时在 `.env` 里设 `POSTER_FONT` 指向一个 `.ttf` 或 `.ttc` 文件即可。
 
-### 收藏的限制
+### 片中拾句的限制
 
 - **台词**：在电影详情点「+ 收藏台词」，或在对话里让 Agent 收藏，或在海报对话框里勾选 Wikiquote 台词后收藏。上限 2000 字，备注上限 200 字。
 - **截图**：点「+ 上传截图」。上限 10 MB、5000 万像素。上传后统一转成 JPEG（质量 92），长边最长 2400 像素，只保留画面，不保留原文件的元数据。
 - **诗**：从「一键成诗」保存。
+
+### 你收藏的
+
+- **限制**：原文最多 5000 字，标题 100 字，平台 20 字，链接 500 字（必须以 http:// 或 https:// 开头），批注 500 字。同样的原文不能存两次。图片和截图一样：上限 10 MB、5000 万像素，统一转成 JPEG，长边最长 2400 像素。
+- **对话怎么读收藏**：第一版没有检索。每次发消息，把收藏从新到旧放进系统提示词，总长约 16000 字为止，更早的放不下就不放。收藏多了以后，旧的那部分 Agent 看不到，这是已知限制，之后要换成按相关度检索。
+- **对话没有工具**：不联网，不改日记，也不改收藏。
+- **图片**：Agent 看不到图片内容，只读标题和批注。
 
 ### 成诗用到的材料
 

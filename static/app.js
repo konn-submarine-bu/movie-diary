@@ -1130,7 +1130,7 @@ async function renderClipWall() {
     box.replaceChildren();
     poems.forEach((p, i) => { const c = poemCard(p, true); c.style.setProperty("--i", i); box.append(c); });
     if (!clips.length && !poems.length) {
-      box.append(el("p", { class: "wall-empty" }, "还没有收藏。在某部电影的详情里点「+ 收藏台词」「+ 上传截图」，或把「一键成诗」写的诗保存下来。"));
+      box.append(el("p", { class: "wall-empty" }, "片中拾句还是空的。在某部电影的详情里点「+ 收藏台词」「+ 上传截图」，或把「一键成诗」写的诗保存下来。电影以外的文字，放进「你收藏的」。"));
       return;
     }
     const open = (c) => { setView("cal"); focusEntryOrDay(c.entry_id); };
@@ -1274,6 +1274,7 @@ function setView(v) {
   state.view = v;
   document.body.dataset.view = v;
   if (v === "clips") renderClipWall();
+  if (v === "pieces" && window.renderPieces) window.renderPieces();
   document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-selected", String(x.dataset.view === v)));
 }
 

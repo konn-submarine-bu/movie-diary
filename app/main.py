@@ -20,6 +20,7 @@ from .impressions import ImpressionService
 from .errors import AppError, describe
 from .llm import LLM, OpenAICompatLLM
 from .personas import PersonaService, mentioned, name_of, public as public_personas
+from .pieces import PLATFORMS, PieceChat, validate as validate_piece
 from .poems import POETS, PoemService, style_of
 from .posters import MAX_EXTRA, ImageGenerator, OpenAICompatImages, PosterService, style_catalog
 from .quotes import Wikiquote
@@ -107,6 +108,22 @@ class CollageIn(BaseModel):
     quotes: list[str] = Field(min_length=1, max_length=4)
 
 
+class PieceIn(BaseModel):
+    text: str = Field(min_length=1, max_length=5000)
+    title: str = ""
+    platform: str = ""
+    url: str = ""
+    note: str = ""
+
+
+class PiecePatch(BaseModel):
+    text: str | None = None
+    title: str | None = None
+    platform: str | None = None
+    url: str | None = None
+    note: str | None = None
+
+
 def error_response(code: str, message: str, status: int) -> JSONResponse:
     return JSONResponse({"error_code": code, "error": message}, status_code=status)
 
@@ -126,11 +143,13 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
     persona_service = PersonaService(db, llm)
     film_page = FilmPage(db, tmdb, search, llm)
     collage_service = CollageService(settings, db, tmdb)
+    piece_chat = PieceChat(db, llm)
     wikiquote = wikiquote or Wikiquote()
 
     app = FastAPI(title="Movie Diary")
     settings.posters_dir.mkdir(parents=True, exist_ok=True)
     settings.clips_dir.mkdir(parents=True, exist_ok=True)
+    settings.pieces_dir.mkdir(parents=True, exist_ok=True)
 
     @app.exception_handler(AppError)
     async def _app_error(_: Request, exc: AppError) -> JSONResponse:
@@ -455,8 +474,76 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
             raise AppError("poem_not_found", f"No poem with id {poem_id}", 404)
         db.delete_poem(poem_id)
 
+    # ---- 「你收藏的」: pieces from outside the diary ---------------------
+    def need_piece(piece_id: int) -> dict[str, Any]:
+        piece = db.get_piece(piece_id)
+        if piece is None:
+            raise AppError("piece_not_found", f"No saved piece with id {piece_id}", 404)
+        return piece
+
+    # Chat routes come before /api/pieces/{piece_id} so "chat" is not read as an id.
+    @app.get("/api/pieces/chat")
+    def piece_history() -> dict[str, Any]:
+        return {"messages": db.list_piece_messages()}
+
+    @app.post("/api/pieces/chat")
+    async def piece_send(body: ChatIn) -> dict[str, Any]:
+        return await piece_chat.reply(body.message)
+
+    @app.delete("/api/pieces/chat", status_code=204)
+    def piece_clear() -> None:
+        db.clear_piece_messages()
+
+    @app.get("/api/pieces")
+    def list_pieces() -> dict[str, Any]:
+        return {"pieces": db.list_pieces(), "platforms": PLATFORMS}
+
+    @app.post("/api/pieces", status_code=201)
+    def create_piece(body: PieceIn) -> dict[str, Any]:
+        data = validate_piece(body.model_dump())
+        if not data["text"]:
+            raise AppError("piece_empty", "text must not be empty", 422)
+        if db.find_piece_text(data["text"]):
+            raise AppError("piece_already_exists", "This text is already saved", 409)
+        return db.add_piece({"kind": "text", **data})
+
+    @app.post("/api/pieces/image", status_code=201)
+    async def create_image_piece(request: Request, title: str = "", platform: str = "",
+                                 url: str = "", note: str = "") -> dict[str, Any]:
+        data = validate_piece({"title": title, "platform": platform, "url": url, "note": note})
+        declared = request.headers.get("content-length")
+        if declared and declared.isdigit() and int(declared) > MAX_IMAGE_BYTES:
+            raise AppError("image_too_large", f"Image is larger than {MAX_IMAGE_BYTES // 1024 // 1024} MB", 413)
+        buf = bytearray()
+        async for chunk in request.stream():
+            buf.extend(chunk)
+            if len(buf) > MAX_IMAGE_BYTES:
+                raise AppError("image_too_large",
+                               f"Image is larger than {MAX_IMAGE_BYTES // 1024 // 1024} MB", 413)
+        filename = store_image(bytes(buf), settings.pieces_dir, "piece")
+        return db.add_piece({"kind": "image", "filename": filename, **data})
+
+    @app.patch("/api/pieces/{piece_id}")
+    def patch_piece(piece_id: int, body: PiecePatch) -> dict[str, Any]:
+        piece = need_piece(piece_id)
+        patch = body.model_dump(exclude_unset=True)
+        if not patch:
+            raise AppError("request_invalid", "patch has no fields", 422)
+        cleaned = validate_piece({**piece, **patch})
+        if piece["kind"] == "text" and not cleaned["text"]:
+            raise AppError("piece_empty", "text must not be empty", 422)
+        return db.update_piece(piece_id, {k: cleaned[k] for k in patch})
+
+    @app.delete("/api/pieces/{piece_id}", status_code=204)
+    def delete_piece(piece_id: int) -> None:
+        piece = need_piece(piece_id)
+        db.delete_piece(piece_id)
+        if piece["filename"]:
+            (settings.pieces_dir / piece["filename"]).unlink(missing_ok=True)
+
     app.mount("/media/posters", StaticFiles(directory=settings.posters_dir), name="posters")
     app.mount("/media/clips", StaticFiles(directory=settings.clips_dir), name="clips")
+    app.mount("/media/pieces", StaticFiles(directory=settings.pieces_dir), name="pieces")
 
     if (STATIC / "index.html").is_file():
         @app.get("/{path:path}", include_in_schema=False)

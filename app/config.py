@@ -60,6 +60,10 @@ class Settings:
         return self.data_dir / "clips"
 
     @property
+    def pieces_dir(self) -> Path:
+        return self.data_dir / "pieces"
+
+    @property
     def db_path(self) -> Path:
         return self.data_dir / "diary.sqlite3"
 
