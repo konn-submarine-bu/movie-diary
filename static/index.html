@@ -119,13 +119,16 @@
         <div class="pc-msgs" id="pc-msgs" aria-live="polite"></div>
         <div id="pc-chat-error" class="error" role="alert" hidden></div>
         <div class="chips" id="pc-sug"></div>
+        <div class="pc-attach" id="pc-attach" hidden></div>
         <form class="composer" id="pc-chat-form">
+          <button type="button" id="pc-attach-btn" class="pc-clip" aria-label="发一张图片" title="发一张图片（也可以直接粘贴或拖进来）">＋图</button>
           <label class="sr-only" for="pc-chat-input">输入消息</label>
-          <textarea id="pc-chat-input" rows="1" maxlength="4000" placeholder="想聊哪个话题？或者让我替你说一段"></textarea>
+          <textarea id="pc-chat-input" rows="1" maxlength="4000" placeholder="想聊哪个话题？或者让我替你说一段。也可以贴一张图"></textarea>
           <button type="submit" id="pc-send" aria-label="发送">↵</button>
         </form>
       </section>
       <input type="file" id="pc-image" accept="image/*" hidden>
+      <input type="file" id="pc-chat-image" accept="image/*" hidden>
     </section>
   </div>
 

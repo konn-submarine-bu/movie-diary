@@ -411,4 +411,29 @@ body[data-view=pieces] .pieces { display: grid; grid-template-columns: minmax(0,
 .pc-chat { position: sticky; top: 20px; }
 .pc-msgs { height: min(56vh, 560px); overflow-y: auto; display: grid; align-content: start; gap: 14px; padding: 18px 0 8px; scrollbar-width: thin; }
 .pc-msgs .m.u span { white-space: pre-wrap; }
+.pc-ocr { margin-top: 10px; font-size: 13px; color: var(--muted); }
+.pc-ocr summary { cursor: pointer; letter-spacing: .1em; font-size: 12px; }
+.pc-ocr summary:hover { color: var(--accent-text); }
+.pc-ocr blockquote { margin: 8px 0 0; font-family: var(--serif); font-size: 15px; line-height: 1.75; color: var(--text); white-space: pre-wrap; max-height: 14em; overflow-y: auto; }
+.pc-ocr .cap { margin: 6px 0 0; font-size: 12px; font-style: italic; }
+.pc-ocr .lnk { font-size: 12px; margin: 6px 14px 0 0; opacity: .6; }
+.pc-ocr.failed { color: #e5786d; }
+.pc-ocr.failed .lnk { margin-left: 8px; opacity: 1; }
+.pc-ocr.pending { animation: pulse 1.4s ease-in-out infinite; }
+.pc-ocr.editing { display: grid; gap: 8px; }
+.pc-ocr.editing textarea, .pc-ocr.editing input { width: 100%; background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--muted) 40%, transparent); color: var(--text); font: inherit; font-size: 14px; line-height: 1.7; padding: 4px 2px; resize: vertical; }
+.pc-ocr.editing textarea:focus, .pc-ocr.editing input:focus { outline: none; border-color: var(--accent); }
+.pc-chat.over { outline: 1px dashed var(--accent); outline-offset: 8px; border-radius: 8px; }
+.composer .pc-clip { font-size: 12px; letter-spacing: .08em; color: var(--muted); white-space: nowrap; transition: color .3s; }
+.composer .pc-clip:hover { color: var(--accent-text); transform: none; }
+.pc-attach { display: flex; align-items: center; gap: 14px; margin: 8px 0 4px; }
+.pc-attach[hidden] { display: none; }
+.pc-attach img { height: 64px; width: auto; border-radius: 4px; }
+.pc-attach .muted { margin: 0; }
+.pc-attach .lnk { font-size: 12px; }
+.pc-mimg { display: block; max-width: 220px; max-height: 260px; margin: 0 0 6px auto; border-radius: 4px; cursor: zoom-in; }
+.m.a .pc-mimg { margin-left: 0; }
+.pc-mact { font-size: 12px; margin-bottom: 4px; }
+.pc-mact .lnk { font-size: 12px; }
+.pc-saved { color: var(--accent-text); letter-spacing: .06em; }
 @media (max-width: 920px) { body[data-view=pieces] .pieces { grid-template-columns: 1fr; } .pc-chat { position: static; } .pc-row { grid-template-columns: 1fr; } }

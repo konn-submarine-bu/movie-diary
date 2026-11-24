@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date
 from typing import Any, Literal
 
@@ -20,7 +21,8 @@ from .impressions import ImpressionService
 from .errors import AppError, describe
 from .llm import LLM, OpenAICompatLLM
 from .personas import PersonaService, mentioned, name_of, public as public_personas
-from .pieces import PLATFORMS, PieceChat, validate as validate_piece
+from .pieces import (MAX_CAPTION, PLATFORMS, STORE_SIZE, PieceChat, copy_image, public_message,
+                     transcribe_piece, validate as validate_piece)
 from .poems import POETS, PoemService, style_of
 from .posters import MAX_EXTRA, ImageGenerator, OpenAICompatImages, PosterService, style_catalog
 from .quotes import Wikiquote
@@ -29,6 +31,7 @@ from .websearch import WebSearch
 
 log = logging.getLogger("movie_diary")
 STATIC = ROOT / "static"
+CHAT_IMAGE = re.compile(r"chat-[0-9a-f]{12}\.jpg")
 
 
 class EntryCreate(BaseModel):
@@ -122,6 +125,19 @@ class PiecePatch(BaseModel):
     platform: str | None = None
     url: str | None = None
     note: str | None = None
+    caption: str | None = None
+
+
+class PieceMeta(BaseModel):
+    title: str = ""
+    platform: str = ""
+    url: str = ""
+    note: str = ""
+
+
+class PieceChatIn(BaseModel):
+    message: str = Field(default="", max_length=4000)
+    image: str = ""
 
 
 def error_response(code: str, message: str, status: int) -> JSONResponse:
@@ -143,7 +159,7 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
     persona_service = PersonaService(db, llm)
     film_page = FilmPage(db, tmdb, search, llm)
     collage_service = CollageService(settings, db, tmdb)
-    piece_chat = PieceChat(db, llm)
+    piece_chat = PieceChat(db, llm, settings.pieces_dir, settings.max_agent_steps)
     wikiquote = wikiquote or Wikiquote()
 
     app = FastAPI(title="Movie Diary")
@@ -481,18 +497,58 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
             raise AppError("piece_not_found", f"No saved piece with id {piece_id}", 404)
         return piece
 
+    async def read_upload(request: Request) -> bytes:
+        declared = request.headers.get("content-length")
+        if declared and declared.isdigit() and int(declared) > MAX_IMAGE_BYTES:
+            raise AppError("image_too_large", f"Image is larger than {MAX_IMAGE_BYTES // 1024 // 1024} MB", 413)
+        buf = bytearray()
+        async for chunk in request.stream():
+            buf.extend(chunk)
+            if len(buf) > MAX_IMAGE_BYTES:
+                raise AppError("image_too_large",
+                               f"Image is larger than {MAX_IMAGE_BYTES // 1024 // 1024} MB", 413)
+        return bytes(buf)
+
     # Chat routes come before /api/pieces/{piece_id} so "chat" is not read as an id.
     @app.get("/api/pieces/chat")
     def piece_history() -> dict[str, Any]:
-        return {"messages": db.list_piece_messages()}
+        return {"messages": [public_message(m) for m in db.list_piece_messages()]}
+
+    @app.post("/api/pieces/chat/image", status_code=201)
+    async def piece_chat_image(request: Request) -> dict[str, Any]:
+        """Upload an image to attach to the next chat message. It is not a saved piece until /save."""
+        filename = store_image(await read_upload(request), settings.pieces_dir, "chat", STORE_SIZE)
+        return {"image": filename, "image_url": f"/media/pieces/{filename}"}
 
     @app.post("/api/pieces/chat")
-    async def piece_send(body: ChatIn) -> dict[str, Any]:
-        return await piece_chat.reply(body.message)
+    async def piece_send(body: PieceChatIn) -> dict[str, Any]:
+        if body.image and not (CHAT_IMAGE.fullmatch(body.image) and (settings.pieces_dir / body.image).is_file()):
+            raise AppError("chat_image_not_found", f"No uploaded chat image {body.image!r}; upload it first", 404)
+        return await piece_chat.reply(body.message, body.image)
 
     @app.delete("/api/pieces/chat", status_code=204)
     def piece_clear() -> None:
+        images = [m["meta"].get("image", "") for m in db.list_piece_messages(100000)]
         db.clear_piece_messages()
+        for name in images:
+            if name and CHAT_IMAGE.fullmatch(name):
+                (settings.pieces_dir / name).unlink(missing_ok=True)
+
+    @app.post("/api/pieces/chat/{message_id}/save", status_code=201)
+    async def piece_save_chat_image(message_id: int, body: PieceMeta) -> dict[str, Any]:
+        """Turn an image sent in the chat into a saved piece (copied, so clearing the chat keeps it)."""
+        msg = db.get_piece_message(message_id)
+        image = msg["meta"].get("image", "") if msg else ""
+        if not image or not (settings.pieces_dir / image).is_file():
+            raise AppError("chat_image_not_found", f"Message {message_id} has no image", 404)
+        if msg["meta"].get("saved_piece_id") and db.get_piece(msg["meta"]["saved_piece_id"]):
+            raise AppError("piece_already_exists",
+                           f"This image is already saved as #{msg['meta']['saved_piece_id']}", 409)
+        data = validate_piece(body.model_dump())
+        piece = db.add_piece({"kind": "image", "filename": copy_image(settings.pieces_dir, image), **data})
+        piece = await transcribe_piece(db, llm, settings.pieces_dir, piece)
+        db.set_piece_message_meta(message_id, {**msg["meta"], "saved_piece_id": piece["id"]})
+        return piece
 
     @app.get("/api/pieces")
     def list_pieces() -> dict[str, Any]:
@@ -510,18 +566,18 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
     @app.post("/api/pieces/image", status_code=201)
     async def create_image_piece(request: Request, title: str = "", platform: str = "",
                                  url: str = "", note: str = "") -> dict[str, Any]:
+        """Store the image, then transcribe it. A failed transcription keeps the piece with ocr_status=failed."""
         data = validate_piece({"title": title, "platform": platform, "url": url, "note": note})
-        declared = request.headers.get("content-length")
-        if declared and declared.isdigit() and int(declared) > MAX_IMAGE_BYTES:
-            raise AppError("image_too_large", f"Image is larger than {MAX_IMAGE_BYTES // 1024 // 1024} MB", 413)
-        buf = bytearray()
-        async for chunk in request.stream():
-            buf.extend(chunk)
-            if len(buf) > MAX_IMAGE_BYTES:
-                raise AppError("image_too_large",
-                               f"Image is larger than {MAX_IMAGE_BYTES // 1024 // 1024} MB", 413)
-        filename = store_image(bytes(buf), settings.pieces_dir, "piece")
-        return db.add_piece({"kind": "image", "filename": filename, **data})
+        filename = store_image(await read_upload(request), settings.pieces_dir, "piece", STORE_SIZE)
+        piece = db.add_piece({"kind": "image", "filename": filename, **data})
+        return await transcribe_piece(db, llm, settings.pieces_dir, piece)
+
+    @app.post("/api/pieces/{piece_id}/transcribe")
+    async def retranscribe_piece(piece_id: int) -> dict[str, Any]:
+        piece = need_piece(piece_id)
+        if piece["kind"] != "image":
+            raise AppError("piece_not_image", f"#{piece_id} is a text piece", 422)
+        return await transcribe_piece(db, llm, settings.pieces_dir, piece)
 
     @app.patch("/api/pieces/{piece_id}")
     def patch_piece(piece_id: int, body: PiecePatch) -> dict[str, Any]:
@@ -529,10 +585,18 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
         patch = body.model_dump(exclude_unset=True)
         if not patch:
             raise AppError("request_invalid", "patch has no fields", 422)
+        caption = patch.pop("caption", None)
+        if caption is not None and piece["kind"] != "image":
+            raise AppError("piece_not_image", "caption only applies to image pieces", 422)
         cleaned = validate_piece({**piece, **patch})
         if piece["kind"] == "text" and not cleaned["text"]:
             raise AppError("piece_empty", "text must not be empty", 422)
-        return db.update_piece(piece_id, {k: cleaned[k] for k in patch})
+        changes = {k: cleaned[k] for k in patch}
+        if caption is not None:
+            if len(caption.strip()) > MAX_CAPTION:
+                raise AppError("piece_too_long", f"caption is longer than {MAX_CAPTION} characters", 422)
+            changes["caption"] = caption.strip()
+        return db.update_piece(piece_id, changes)
 
     @app.delete("/api/pieces/{piece_id}", status_code=204)
     def delete_piece(piece_id: int) -> None:

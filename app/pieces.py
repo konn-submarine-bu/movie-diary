@@ -1,47 +1,114 @@
-"""「你收藏的」: texts and images saved from outside the diary, and the chat that draws on them."""
+"""「你收藏的」: texts and images saved from outside the diary, and the chat that draws on them.
+
+Images are transcribed once on upload (words in the image plus a short caption) so they can be searched like
+text. The chat agent finds pieces with keyword tools instead of getting every piece in its prompt, and can pull
+an image back up with view_image when the words alone are not enough.
+"""
 from __future__ import annotations
 
+import base64
+import io
+import json
+import math
+import shutil
+import secrets
+from pathlib import Path
 from typing import Any
 
+from PIL import Image
+
 from .db import Database
-from .errors import AppError
+from .errors import AppError, describe
 from .llm import LLM
+from .llmjson import extract_json
 
 MAX_TEXT = 5000
 MAX_TITLE = 100
 MAX_PLATFORM = 20
 MAX_URL = 500
 MAX_NOTE = 500
+MAX_CAPTION = 300
 HISTORY = 40
-# Every piece goes into the prompt, newest first, until this many characters. Older ones are left out.
-CONTEXT_BUDGET = 16000
+CATALOG_LIMIT = 300      # newest pieces listed in the system prompt; older ones are reachable through the tools
+SEARCH_LIMIT = 20
+READ_LIMIT = 10
+HISTORY_IMAGES = 2       # images from earlier chat messages that are re-sent to the model
+# Stored piece images: wide enough to read, tall enough for long screenshots.
+STORE_SIZE = (1600, 16000)
+# Tall images are cut into pieces of at most this aspect (height / width) before they go to the model,
+# because models shrink one long image until the words are unreadable.
+CHUNK_ASPECT = 1.5
+MAX_CHUNKS = 8
+SEND_WIDTH = 1280
 
 PLATFORMS = ["知乎", "豆瓣", "微博", "小红书", "公众号", "网易云音乐", "QQ音乐", "书", "其他"]
 
-SYSTEM = """你是用户的「你收藏的」伙伴。用户平时读到打动他的文字（知乎回答、影评、歌词、书里的段落等）会存在这里，
-有时还附一句自己的批注。你的工作是帮他咀嚼、消化这些内容，最终能用自己的话说出有见地的看法。
+TRANSCRIBE = """你在帮用户把一张收藏的图片转成文字，方便以后检索。图片可能被切成上下相连的几段，按顺序当作一张图读。
 
-规则：
-1. 只依据下面列出的收藏来引用。引用原文时用「」括起，一字不改，并注明出处，格式如（#12 · 知乎 · 标题）。
-   不要编造收藏里没有的原文，也不要把你自己的话说成是原文。
+只返回一个 JSON 对象，不要别的内容：
+{"text": "图中的全部文字，原样转写，保留分段和换行。不要改写、不要总结、不要补全。看不清的字用□。界面上的按钮、点赞数、时间等杂项不要。图中没有文字就给空字符串",
+ "caption": "一两句话说明这是什么图、画面里有什么，以及能看出的来源线索，例如“知乎回答截图”“网易云音乐歌词页”“一张雨夜街道的照片”"}"""
+
+SYSTEM = """你是用户的「你收藏的」伙伴。用户平时读到打动他的文字（知乎回答、影评、歌词、书里的段落等）会存在这里，
+有时附一句自己的批注。你的工作是帮他咀嚼、消化这些内容，最终能用自己的话说出有见地的看法。
+
+怎么找收藏：
+- 下面的目录只有每条收藏的开头，回答前要用工具读原文，不要凭目录里的片段下结论。
+- search_pieces 按关键字找。一次给多个词：用户说的词，加上你想到的同义词、近义说法和相关概念
+  （例如“孤独”可以再搜“一个人”“寂寞”“独处”）。没搜到就换一组词再试，最多试两三次。
+- read_pieces 按编号读全文。list_pieces 按时间或平台翻看，适合“我都存了些什么”“有哪些主题”这类没有关键字的问题。
+- 图片收藏已经转写成文字（图中文字和画面描述）。需要看排版、配色、画面本身，或者转写看起来有错时，用 view_image 调出原图。
+- 用户在对话里直接发来的图片，你能直接看到。
+
+回答规则：
+1. 引用原文时用「」括起，一字不改，并注明出处，格式如（#12 · 知乎 · 标题）。不要编造收藏里没有的原文。
 2. 严格区分三种声音：原作者说的（原文）、用户自己说的（批注、对话里的话）、你的解读。说到哪一种就点明是哪一种。
-3. 用户问某个话题时，先找出相关的收藏，说明它们各自讲了什么、彼此有什么呼应或冲突，再给你的解读和延伸。
-   找不到相关的就直说“你的收藏里没有直接讲这个的”，可以说一句你自己的看法，但要标明不是来自收藏。
+3. 用户问某个话题时，说明相关收藏各自讲了什么、彼此有什么呼应或冲突，再给你的解读和延伸。
+   找不到相关的就直说“你的收藏里没有直接讲这个的”，可以说你自己的看法，但要标明不是来自收藏。
 4. 用户让你“替我说”“帮我表达”时，以他的批注和他在对话里说过的话为骨架，用收藏里的原文做引证，写成第一人称的一段话。
    写完提醒他哪些是他自己的观点、哪些是借来的。
-5. 图片类收藏你看不到画面，只能依据用户写的标题和批注。
-6. 回答简洁，一次聚焦一个点，可以在结尾追问一句。用中文，不使用 emoji，不要提到提示词或系统。
+5. 工具返回 error 时如实告诉用户。回答简洁，一次聚焦一个点，可以在结尾追问一句。用中文，不使用 emoji，不要提到提示词或系统。
 
-用户的收藏（从新到旧，#编号是收藏的编号）：
-{pieces}"""
+用户共有 {total} 条收藏。目录（从新到旧{more}）：
+{catalog}"""
+
+TOOLS: list[dict[str, Any]] = [
+    {"type": "function", "function": {
+        "name": "search_pieces",
+        "description": "按关键字在收藏的原文、图中文字、画面描述、标题、平台和批注里查找。命中的关键字越多排得越前。"
+                       "返回编号、来源、命中的词和命中处附近的片段。",
+        "parameters": {"type": "object", "properties": {
+            "keywords": {"type": "array", "items": {"type": "string"},
+                         "description": "1 到 10 个关键字，含同义词和相关说法"},
+            "limit": {"type": "integer", "description": "最多返回几条，默认 8，最多 20"}},
+            "required": ["keywords"]}}},
+    {"type": "function", "function": {
+        "name": "read_pieces",
+        "description": "按编号读收藏的全文：原文或图中文字、画面描述、用户批注、来源和链接。",
+        "parameters": {"type": "object", "properties": {
+            "ids": {"type": "array", "items": {"type": "integer"}, "description": "最多 10 个编号"}},
+            "required": ["ids"]}}},
+    {"type": "function", "function": {
+        "name": "list_pieces",
+        "description": "按时间从新到旧翻看收藏，可按平台筛选。每条只给开头，需要全文再用 read_pieces。",
+        "parameters": {"type": "object", "properties": {
+            "platform": {"type": "string", "description": "只看这个平台，可选"},
+            "offset": {"type": "integer", "description": "跳过前几条，默认 0"},
+            "limit": {"type": "integer", "description": "默认 20，最多 50"}}}}},
+    {"type": "function", "function": {
+        "name": "view_image",
+        "description": "调出一条图片收藏的原图，下一条消息里会附上图片。",
+        "parameters": {"type": "object", "properties": {
+            "piece_id": {"type": "integer"}}, "required": ["piece_id"]}}},
+]
 
 
-def _clean(value: str | None) -> str:
-    return (value or "").strip()
+def _clean(value: Any) -> str:
+    return value.strip() if isinstance(value, str) else ""
 
 
 def validate(data: dict[str, Any]) -> dict[str, Any]:
-    """Strip and check the optional fields shared by text and image pieces."""
+    """Strip and check the user-editable fields shared by text and image pieces."""
     out = {k: _clean(data.get(k)) for k in ("text", "title", "platform", "url", "note")}
     limits = {"text": MAX_TEXT, "title": MAX_TITLE, "platform": MAX_PLATFORM, "url": MAX_URL, "note": MAX_NOTE}
     for key, limit in limits.items():
@@ -52,48 +119,236 @@ def validate(data: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def describe_piece(p: dict[str, Any]) -> str:
-    head = " · ".join(x for x in (f"#{p['id']}", p["platform"], p["title"]) if x)
-    lines = [head]
-    if p["kind"] == "image":
-        lines.append("（图片，看不到画面）")
-    if p["text"]:
-        lines.append(f"原文：{p['text']}")
+# ---- images ---------------------------------------------------------------
+def image_parts(path: Path) -> list[dict[str, Any]]:
+    """The image as OpenAI-style image_url parts. Tall screenshots are cut top to bottom into readable pieces."""
+    try:
+        with Image.open(path) as src:
+            img = src.convert("RGB")
+    except (OSError, ValueError) as exc:
+        raise AppError("image_unreadable", f"Cannot open stored image {path.name}. {describe(exc)}", 500) from exc
+    if img.width > SEND_WIDTH:
+        img = img.resize((SEND_WIDTH, max(1, round(img.height * SEND_WIDTH / img.width))))
+    step = max(round(img.width * CHUNK_ASPECT), math.ceil(img.height / MAX_CHUNKS))
+    overlap = min(40, step // 10)
+    parts, top = [], 0
+    while True:
+        bottom = min(img.height, top + step)
+        buf = io.BytesIO()
+        img.crop((0, top, img.width, bottom)).save(buf, "JPEG", quality=85)
+        url = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+        parts.append({"type": "image_url", "image_url": {"url": url}})
+        if bottom >= img.height:
+            return parts
+        top = bottom - overlap
+
+
+def copy_image(directory: Path, filename: str) -> str:
+    target = f"piece-{secrets.token_hex(6)}.jpg"
+    shutil.copyfile(directory / filename, directory / target)
+    return target
+
+
+async def transcribe(llm: LLM, path: Path) -> dict[str, str]:
+    """Words and a caption for one image. Raises AppError when the model fails or replies badly."""
+    parts = image_parts(path)
+    note = f"图片共 {len(parts)} 段，从上到下排列。" if len(parts) > 1 else "图片如下。"
+    reply = await llm.chat([{"role": "system", "content": TRANSCRIBE},
+                            {"role": "user", "content": [{"type": "text", "text": note}, *parts]}])
+    data = extract_json(reply.content, "image_transcribe_failed")
+    text, caption = _clean(data.get("text")), _clean(data.get("caption"))
+    if not text and not caption:
+        raise AppError("image_transcribe_failed", "The model returned neither text nor a caption", 502)
+    return {"text": text[:MAX_TEXT], "caption": caption[:MAX_CAPTION]}
+
+
+async def transcribe_piece(db: Database, llm: LLM, directory: Path, piece: dict[str, Any]) -> dict[str, Any]:
+    """Transcribe an image piece and record the outcome. Never raises for model errors: they are stored instead."""
+    try:
+        got = await transcribe(llm, directory / piece["filename"])
+    except AppError as exc:
+        return db.update_piece(piece["id"], {"ocr_status": "failed", "ocr_error": f"{exc.code}: {exc.message}"[:500]})
+    return db.update_piece(piece["id"], {**got, "ocr_status": "ok", "ocr_error": ""})
+
+
+# ---- what the agent sees ----------------------------------------------------
+def _source(p: dict[str, Any]) -> str:
+    return " · ".join(x for x in (f"#{p['id']}", p["platform"], p["title"]) if x)
+
+
+def _head(text: str, n: int) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= n else text[:n] + "…"
+
+
+def brief(p: dict[str, Any]) -> dict[str, Any]:
+    out = {"id": p["id"], "source": _source(p), "kind": p["kind"], "head": _head(p["text"] or p["caption"], 60)}
     if p["note"]:
-        lines.append(f"用户批注：{p['note']}")
-    if p["url"]:
-        lines.append(f"链接：{p['url']}")
+        out["note"] = _head(p["note"], 60)
+    return out
+
+
+def full(p: dict[str, Any]) -> dict[str, Any]:
+    out = {"id": p["id"], "source": _source(p), "kind": p["kind"], "saved_at": p["created_at"][:10]}
+    if p["kind"] == "image":
+        out["image_text"] = p["text"]
+        out["caption"] = p["caption"]
+        if p["ocr_status"] != "ok":
+            out["transcription"] = "失败，图中文字未知，可以用 view_image 看原图"
+    else:
+        out["text"] = p["text"]
+    for key in ("note", "url"):
+        if p[key]:
+            out[key] = p[key]
+    return out
+
+
+def catalog(pieces: list[dict[str, Any]]) -> str:
+    if not pieces:
+        return "（还没有任何收藏）"
+    lines = []
+    for p in pieces[:CATALOG_LIMIT]:
+        kind = "图片 · " if p["kind"] == "image" else ""
+        line = f"{_source(p)} · {kind}{_head(p['text'] or p['caption'], 30)}"
+        if p["note"]:
+            line += f" ｜批注：{_head(p['note'], 30)}"
+        lines.append(line)
     return "\n".join(lines)
 
 
-def context(pieces: list[dict[str, Any]]) -> tuple[str, int]:
-    """The prompt block for the newest pieces that fit the budget, and how many were included."""
-    blocks, used = [], 0
+def search(pieces: list[dict[str, Any]], keywords: list[str], limit: int = 8) -> list[dict[str, Any]]:
+    """Substring match, case-insensitive. Pieces that contain more distinct keywords rank higher, then newer."""
+    words = list(dict.fromkeys(w.strip().lower() for w in keywords if isinstance(w, str) and w.strip()))[:10]
+    if not words:
+        raise AppError("search_keywords_empty", "keywords must contain at least one non-empty word", 422)
+    scored = []
     for p in pieces:
-        block = describe_piece(p)
-        if blocks and used + len(block) > CONTEXT_BUDGET:
-            break
-        blocks.append(block)
-        used += len(block)
-    return ("\n\n".join(blocks) if blocks else "（还没有任何收藏）"), len(blocks)
+        fields = {k: p[k].lower() for k in ("text", "caption", "title", "platform", "note")}
+        hits = [w for w in words if any(w in v for v in fields.values())]
+        if not hits:
+            continue
+        body = p["text"] or p["caption"]
+        where = min((body.lower().find(w) for w in hits if w in body.lower()), default=-1)
+        snippet = _head(body[max(0, where - 40): where + 80], 120) if where >= 0 else _head(body, 80)
+        hit = {**brief(p), "matched": hits, "snippet": snippet}
+        hit.pop("head")
+        scored.append((len(hits), p["id"], hit))
+    scored.sort(key=lambda s: (s[0], s[1]), reverse=True)
+    return [s[2] for s in scored[:max(1, min(limit, SEARCH_LIMIT))]]
+
+
+def public_message(m: dict[str, Any]) -> dict[str, Any]:
+    image = m["meta"].get("image", "")
+    return {**m, "image_url": f"/media/pieces/{image}" if image else ""}
 
 
 class PieceChat:
-    def __init__(self, db: Database, llm: LLM) -> None:
-        self._db, self._llm = db, llm
+    def __init__(self, db: Database, llm: LLM, directory: Path, max_steps: int) -> None:
+        self._db, self._llm, self._dir, self._max_steps = db, llm, directory, max_steps
 
-    async def reply(self, text: str) -> dict[str, Any]:
+    def _history(self) -> list[dict[str, Any]]:
+        rows = self._db.list_piece_messages(HISTORY)
+        with_image = [m["id"] for m in rows if m["role"] == "user" and m["meta"].get("image")][-HISTORY_IMAGES:]
+        out: list[dict[str, Any]] = []
+        for m in rows:
+            image = m["meta"].get("image") if m["role"] == "user" else None
+            if not image:
+                out.append({"role": m["role"], "content": m["content"]})
+            elif m["id"] in with_image and (self._dir / image).is_file():
+                out.append({"role": "user", "content": [{"type": "text", "text": m["content"] or "（发了一张图片）"},
+                                                        *image_parts(self._dir / image)]})
+            else:
+                out.append({"role": "user", "content": f"{m['content']}\n（这条消息附过一张图片，现在看不到了）".strip()})
+        return out
+
+    def _run_tool(self, name: str, args: dict[str, Any], turn: dict[str, Any]) -> Any:
+        if name == "search_pieces":
+            raw = args.get("keywords")
+            words = raw if isinstance(raw, list) else [raw] if isinstance(raw, str) else []
+            limit = args.get("limit") if isinstance(args.get("limit"), int) else 8
+            hits = search(self._db.list_pieces(), words, limit)
+            turn["searches"].append([w for w in words if isinstance(w, str)][:10])
+            return {"results": hits} if hits else {"results": [], "hint": "没有命中，可以换同义词或更短的词再试"}
+        if name == "read_pieces":
+            ids = [i for i in args.get("ids", []) if isinstance(i, int)][:READ_LIMIT] if isinstance(args.get("ids"), list) else []
+            if not ids:
+                raise AppError("piece_ids_empty", "ids must contain at least one integer piece id", 422)
+            found, missing = [], []
+            for i in ids:
+                p = self._db.get_piece(i)
+                (found.append(full(p)) if p else missing.append(i))
+            turn["read"].extend(p["id"] for p in found)
+            return {"pieces": found, **({"not_found": missing} if missing else {})}
+        if name == "list_pieces":
+            platform = _clean(args.get("platform"))
+            offset = max(0, args.get("offset") if isinstance(args.get("offset"), int) else 0)
+            limit = min(50, max(1, args.get("limit") if isinstance(args.get("limit"), int) else 20))
+            rows = [p for p in self._db.list_pieces() if not platform or p["platform"] == platform]
+            return {"total": len(rows), "offset": offset, "pieces": [brief(p) for p in rows[offset:offset + limit]]}
+        if name == "view_image":
+            p = self._db.get_piece(args["piece_id"]) if isinstance(args.get("piece_id"), int) else None
+            if p is None:
+                raise AppError("piece_not_found", f"No saved piece with id {args.get('piece_id')!r}", 404)
+            if p["kind"] != "image":
+                raise AppError("piece_not_image", f"#{p['id']} is a text piece; use read_pieces", 422)
+            turn["images"].append((p, image_parts(self._dir / p["filename"])))
+            turn["viewed"].append(p["id"])
+            return {"ok": True, "piece": _source(p), "note": "原图附在下一条消息里"}
+        raise AppError("tool_unknown", f"Unknown tool {name!r}", 400)
+
+    def _dispatch(self, name: str, raw: str, turn: dict[str, Any]) -> str:
+        try:
+            args = json.loads(raw or "{}")
+            if not isinstance(args, dict):
+                raise ValueError("arguments must be a JSON object")
+            result = self._run_tool(name, args, turn)
+        except ValueError as exc:
+            result = {"error_code": "tool_arguments_invalid", "error": f"Arguments for {name} are not valid JSON. {describe(exc)}"}
+        except AppError as exc:
+            result = {"error_code": exc.code, "error": exc.message}
+        turn["tools"].append({"name": name, "ok": "error_code" not in result})
+        return json.dumps(result, ensure_ascii=False)
+
+    async def reply(self, text: str, image: str = "") -> dict[str, Any]:
         text = text.strip()
-        if not text:
+        if not text and not image:
             raise AppError("message_empty", "message must not be empty", 422)
         pieces = self._db.list_pieces()
-        block, used = context(pieces)
-        history = [{"role": m["role"], "content": m["content"]} for m in self._db.list_piece_messages(HISTORY)]
-        reply = await self._llm.chat([{"role": "system", "content": SYSTEM.format(pieces=block)},
-                                      *history, {"role": "user", "content": text}])
-        final = reply.content.strip()
+        more = f"，只列出最新的 {CATALOG_LIMIT} 条，更早的用工具查" if len(pieces) > CATALOG_LIMIT else ""
+        system = SYSTEM.format(total=len(pieces), more=more, catalog=catalog(pieces))
+        user: Any = text
+        if image:
+            user = [{"type": "text", "text": text or "（用户发来一张图片，没有附文字）"}, *image_parts(self._dir / image)]
+        messages: list[dict[str, Any]] = [{"role": "system", "content": system}, *self._history(),
+                                          {"role": "user", "content": user}]
+        turn: dict[str, Any] = {"tools": [], "searches": [], "read": [], "viewed": [], "images": []}
+
+        final = ""
+        for _ in range(self._max_steps):
+            reply = await self._llm.chat(messages, TOOLS)
+            if not reply.tool_calls:
+                final = reply.content.strip()
+                break
+            messages.append({"role": "assistant", "content": reply.content or None, "tool_calls": [
+                {"id": c.id, "type": "function", "function": {"name": c.name, "arguments": c.arguments}}
+                for c in reply.tool_calls]})
+            for call in reply.tool_calls:
+                messages.append({"role": "tool", "tool_call_id": call.id,
+                                 "content": self._dispatch(call.name, call.arguments, turn)})
+            # Tool results can only be text, so images asked for with view_image follow as a user message.
+            for p, parts in turn["images"]:
+                messages.append({"role": "user", "content": [
+                    {"type": "text", "text": f"view_image 调出的原图：{_source(p)}"}, *parts]})
+            turn["images"] = []
+        else:
+            raise AppError("agent_step_limit",
+                           f"The agent used all {self._max_steps} tool-call rounds without a final answer. "
+                           "Ask again with a narrower question.", 502)
         if not final:
-            raise AppError("llm_empty_response", "LLM returned an empty answer", 502)
-        user_msg = self._db.add_piece_message("user", text)
-        saved = self._db.add_piece_message("assistant", final, {"pieces_seen": used, "pieces_total": len(pieces)})
-        return {"message": saved, "user_message": user_msg}
+            raise AppError("llm_empty_response", "LLM returned an empty final answer", 502)
+
+        user_msg = self._db.add_piece_message("user", text, {"image": image} if image else {})
+        meta = {"read_ids": list(dict.fromkeys(turn["read"])), "viewed_ids": list(dict.fromkeys(turn["viewed"])),
+                "searches": turn["searches"], "tools": turn["tools"], "pieces_total": len(pieces)}
+        saved = self._db.add_piece_message("assistant", final, meta)
+        return {"message": public_message(saved), "user_message": public_message(user_msg)}

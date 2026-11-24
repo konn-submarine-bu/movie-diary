@@ -33,7 +33,7 @@ class FakeLLM:
         self.calls: list[dict[str, Any]] = []
 
     async def chat(self, messages, tools=None):
-        self.calls.append({"messages": messages, "tools": tools})
+        self.calls.append({"messages": list(messages), "tools": tools})  # snapshot: agent loops keep appending
         if not self.replies:
             raise AssertionError("FakeLLM ran out of scripted replies")
         return self.replies.pop(0)

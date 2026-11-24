@@ -104,6 +104,9 @@ CREATE TABLE IF NOT EXISTS pieces (
   platform TEXT NOT NULL DEFAULT '',
   url TEXT NOT NULL DEFAULT '',
   note TEXT NOT NULL DEFAULT '',
+  caption TEXT NOT NULL DEFAULT '',
+  ocr_status TEXT NOT NULL DEFAULT '',
+  ocr_error TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS piece_messages (
@@ -166,7 +169,11 @@ def _piece(row: sqlite3.Row) -> dict[str, Any]:
     return d
 
 
-PIECE_FIELDS = ("kind", "text", "filename", "title", "platform", "url", "note")
+# For image pieces, `text` holds the words transcribed from the image and `caption` describes the picture.
+# ocr_status is '' for text pieces, 'ok' or 'failed' for images.
+PIECE_FIELDS = ("kind", "text", "filename", "title", "platform", "url", "note", "caption", "ocr_status", "ocr_error")
+PIECE_COLUMNS = {"caption": "TEXT NOT NULL DEFAULT ''", "ocr_status": "TEXT NOT NULL DEFAULT ''",
+                 "ocr_error": "TEXT NOT NULL DEFAULT ''"}
 
 
 def _poster(row: sqlite3.Row) -> dict[str, Any]:
@@ -187,6 +194,10 @@ class Database:
                              " CHECK (status IN ('watched', 'wishlist'))")
             if "source_persona" not in {r["name"] for r in conn.execute("PRAGMA table_info(impressions)")}:
                 conn.execute("ALTER TABLE impressions ADD COLUMN source_persona TEXT NOT NULL DEFAULT ''")
+            have = {r["name"] for r in conn.execute("PRAGMA table_info(pieces)")}
+            for col, decl in PIECE_COLUMNS.items():  # pieces tables created before image transcription
+                if col not in have:
+                    conn.execute(f"ALTER TABLE pieces ADD COLUMN {col} {decl}")
 
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Connection]:
@@ -539,10 +550,10 @@ class Database:
     # pieces: texts and images saved from outside the diary (「你收藏的」) ----
     def add_piece(self, data: dict[str, Any]) -> dict[str, Any]:
         values = {k: data.get(k, "") for k in PIECE_FIELDS}
+        values["created_at"] = now_iso()
         with self._tx() as conn:
-            cur = conn.execute(
-                "INSERT INTO pieces (kind, text, filename, title, platform, url, note, created_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (*values.values(), now_iso()))
+            cur = conn.execute(f"INSERT INTO pieces ({', '.join(values)}) VALUES ({', '.join('?' for _ in values)})",
+                               list(values.values()))
             row = conn.execute("SELECT * FROM pieces WHERE id = ?", (cur.lastrowid,)).fetchone()
         return _piece(row)
 
@@ -580,6 +591,16 @@ class Database:
                                (role, content, json.dumps(meta or {}, ensure_ascii=False), now_iso()))
             row = conn.execute("SELECT * FROM piece_messages WHERE id = ?", (cur.lastrowid,)).fetchone()
         return _message(row)
+
+    def get_piece_message(self, message_id: int) -> dict[str, Any] | None:
+        with self._tx() as conn:
+            row = conn.execute("SELECT * FROM piece_messages WHERE id = ?", (message_id,)).fetchone()
+        return _message(row) if row else None
+
+    def set_piece_message_meta(self, message_id: int, meta: dict[str, Any]) -> None:
+        with self._tx() as conn:
+            conn.execute("UPDATE piece_messages SET meta = ? WHERE id = ?",
+                         (json.dumps(meta, ensure_ascii=False), message_id))
 
     def list_piece_messages(self, limit: int = 200) -> list[dict[str, Any]]:
         with self._tx() as conn:

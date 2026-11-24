@@ -45,7 +45,7 @@ python -m uvicorn app.main:app_factory --factory --port 8000
 |---|---|---|
 | `LLM_BASE_URL` | 空 | 对话模型网关，OpenAI 兼容，必须支持 tool calling |
 | `LLM_API_KEY` | 空 | 对话模型密钥 |
-| `LLM_MODEL` | 空 | 模型名 |
+| `LLM_MODEL` | 空 | 模型名。「你收藏的」里的读图和对话发图也用它，所以要能看图（OpenAI 格式的 `image_url` 消息） |
 | `IMAGE_BASE_URL` | 沿用 `LLM_BASE_URL` | 生图网关，调用 `POST {IMAGE_BASE_URL}/images/generations`，返回 `b64_json` 或 `url` 都支持 |
 | `IMAGE_API_KEY` | 见下 | 生图密钥。只有在没单独设 `IMAGE_BASE_URL` 时才会沿用 `LLM_API_KEY`，不会把对话密钥发给另一个主机 |
 | `IMAGE_MODEL` | 空 | 生图模型名 |
@@ -70,7 +70,7 @@ data/
 ├── diary.sqlite3      日记、对话、海报、收藏、诗，全部在一个 SQLite 文件里
 ├── posters/           台词海报 PNG
 ├── clips/             上传的截图 JPEG
-└── pieces/            「你收藏的」里上传的图片 JPEG
+└── pieces/            「你收藏的」的图片 JPEG：收藏的图（piece-*.jpg）和对话里发的图（chat-*.jpg）
 ```
 
 九张表：
@@ -84,8 +84,8 @@ data/
 | `poems` | 保存的诗：诗人、标题、正文 |
 | `impressions` | 单片页的「印象」气泡：类型、短句、全文、状态（待确认 / 已采纳 / 已校准 / 已驳回）、依据的对话编号、用户拖动后的位置 |
 | `film_info` | 单片页的电影信息缓存，按 TMDB 编号存，30 天过期 |
-| `pieces` | 「你收藏的」：类型（text 或 image）、原文、图片文件名、标题、平台、链接、批注。不挂在电影上 |
-| `piece_messages` | 「你收藏的」页面的对话，和 `messages` 分开 |
+| `pieces` | 「你收藏的」：类型（text 或 image）、原文（图片则是图中文字）、画面描述、读图状态和失败原因、图片文件名、标题、平台、链接、批注。不挂在电影上 |
+| `piece_messages` | 「你收藏的」页面的对话，和 `messages` 分开。用户发的图片文件名、Agent 搜过的词、读过和看过的收藏编号记在 `meta` 里 |
 
 另有一张内部表 `impression_state`，记录每部电影整理到了第几条消息。
 
@@ -132,10 +132,13 @@ data/
 | `DELETE /api/clips/{id}` | 删除收藏 |
 | `GET /api/pieces` | 「你收藏的」全部条目（新的在前）和可选平台列表 |
 | `POST /api/pieces` | 存一段文字，body `{"text": "...", "title": "", "platform": "", "url": "", "note": ""}`，只有 `text` 必填 |
-| `POST /api/pieces/image?title=&platform=&url=&note=` | 上传一张图片，请求体是图片本身 |
-| `PATCH /api/pieces/{id}` | 改原文、标题、平台、链接或批注 |
+| `POST /api/pieces/image?title=&platform=&url=&note=` | 上传一张图片，请求体是图片本身。存下后立即读图，返回时 `ocr_status` 为 `ok` 或 `failed`（失败原因在 `ocr_error`），读图失败不影响收藏本身 |
+| `POST /api/pieces/{id}/transcribe` | 对一张图片收藏重新读图 |
+| `PATCH /api/pieces/{id}` | 改原文（图片则是图中文字）、画面描述 `caption`、标题、平台、链接或批注 |
 | `DELETE /api/pieces/{id}` | 删除，图片文件一并删掉 |
-| `GET/POST/DELETE /api/pieces/chat` | 「和我聊聊」：读取、发送、清空。助手消息的 `meta.pieces_seen` 是这次放进提示词的收藏条数 |
+| `POST /api/pieces/chat/image` | 上传一张要在对话里发的图，返回 `{"image": "chat-….jpg"}`，此时还不是收藏 |
+| `GET/POST/DELETE /api/pieces/chat` | 「和我聊聊」：读取、发送、清空。发送的 body 是 `{"message": "...", "image": ""}`，两者至少有一个。清空时一并删掉对话里发过的图片 |
+| `POST /api/pieces/chat/{message_id}/save` | 把对话里发的那张图存为收藏（复制一份，清空对话不影响），并读图。body 可带 `title`、`platform`、`url`、`note` |
 | `GET /api/poem-styles` | 22 位诗人 |
 | `POST /api/entries/{id}/poem` | 写一首诗（不保存） |
 | `POST /api/entries/{id}/poems` | 保存一首诗 |
@@ -158,6 +161,15 @@ data/
 | `offer_choices` | 给当前追问提供 2 到 4 个可点选的回答，只在单片对话里显示 |
 
 Agent 不能直接调用剧照拼贴和一键成诗，这两个是界面上的功能。
+
+「你收藏的」的对话是另一个 Agent，只有下面四个只读工具，不能联网，也不能改日记或收藏：
+
+| 工具 | 作用 |
+|---|---|
+| `search_pieces` | 按 1 到 10 个关键字查找，命中的不同关键字越多排得越前，返回命中的词和附近的片段 |
+| `read_pieces` | 按编号读全文，一次最多 10 条 |
+| `list_pieces` | 按时间从新到旧翻看，可按平台筛选，适合没有关键字的问题 |
+| `view_image` | 调出一张图片收藏的原图 |
 
 ## 错误码
 
@@ -202,7 +214,7 @@ app/
 ├── quotes.py      Wikiquote 台词查询与解析
 ├── poems.py       22 位诗人与成诗
 ├── clips.py       台词与截图的校验和存储
-├── pieces.py      「你收藏的」：字段校验、对话提示词
+├── pieces.py      「你收藏的」：字段校验、读图、关键字搜索、对话的工具循环
 ├── personas.py    单片页的四位角色：提示词、@ 解析、按顺序回答
 ├── impressions.py 单片页的印象整理：提示词、解析、锁定规则
 ├── filmpage.py    单片页的电影信息缓存、影评搜索、输入补全
@@ -225,7 +237,7 @@ design/            界面设计稿，包括单片页的 mockup-movie-page.html
 python -m pytest -q
 ```
 
-测试用假的 LLM、生图、TMDB、搜索和 Wikiquote，不联网、不花钱，覆盖：日记增删改与想看清单、Agent 工具循环与步数上限、工具报错透传、联网搜索解析、海报生成与降级、剧照拼贴的版式和限制、Wikiquote 解析、收藏与成诗、「你收藏的」的存储与对话。
+测试用假的 LLM、生图、TMDB、搜索和 Wikiquote，不联网、不花钱，覆盖：日记增删改与想看清单、Agent 工具循环与步数上限、工具报错透传、联网搜索解析、海报生成与降级、剧照拼贴的版式和限制、Wikiquote 解析、收藏与成诗、「你收藏的」的存储、读图、搜索工具和对话发图。
 
 ## 重新录制动画
 
@@ -355,9 +367,12 @@ Agent 的行为由[系统提示](../app/agent.py)约束：
 ### 你收藏的
 
 - **限制**：原文最多 5000 字，标题 100 字，平台 20 字，链接 500 字（必须以 http:// 或 https:// 开头），批注 500 字。同样的原文不能存两次。图片和截图一样：上限 10 MB、5000 万像素，统一转成 JPEG，长边最长 2400 像素。
-- **对话怎么读收藏**：第一版没有检索。每次发消息，把收藏从新到旧放进系统提示词，总长约 16000 字为止，更早的放不下就不放。收藏多了以后，旧的那部分 Agent 看不到，这是已知限制，之后要换成按相关度检索。
-- **对话没有工具**：不联网，不改日记，也不改收藏。
-- **图片**：Agent 看不到图片内容，只读标题和批注。
+- **限制（续）**：「你收藏的」的图片长边不缩到 2400，而是宽最多 1600、高最多 16000 像素，长截图里的字才不会被压糊。
+- **读图**：上传时调用一次 `LLM_MODEL`，要求它只返回 JSON：图中文字原样转写（看不清的字用 □，界面杂项不要），外加一两句画面描述。图片先缩到宽 1280，高宽比超过 1.5 的长图从上到下切成最多 8 段、每段略有重叠，按顺序一起发过去。模型出错或没返回 JSON 时，收藏照样存下，标为读图失败，可以重试。
+- **搜索**：大小写不敏感的子串匹配，查原文、图中文字、画面描述、标题、平台和批注。没有分词，所以两个字的中文词也能搜到；同义词靠 Agent 自己扩展。
+- **目录**：系统提示词里只放最新 300 条收藏的目录，每条是编号、来源、开头 30 字和批注开头 30 字。更早的收藏要靠工具找。
+- **对话里的图**：Agent 能直接看到这一轮发来的图。历史消息里只重新发送最近 2 张，更早的只告诉它“这条消息附过一张图片”。`view_image` 调出的图作为下一条用户消息发给模型，因为 OpenAI 格式里工具结果只能是文字。
+- **轮数**：一轮回答最多调用 `MAX_AGENT_STEPS` 次工具（默认 6），用完还没答完会报 `agent_step_limit`。
 
 ### 成诗用到的材料
 

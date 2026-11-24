@@ -17,7 +17,8 @@ MAX_TEXT = 2000
 MAX_NOTE = 200
 
 
-def store_image(data: bytes, directory: Path, entry_id: int | str) -> str:
+def store_image(data: bytes, directory: Path, entry_id: int | str,
+                max_size: tuple[int, int] = (MAX_IMAGE_SIDE, MAX_IMAGE_SIDE)) -> str:
     """Validate, normalize to JPEG and save an uploaded screenshot. Returns the stored filename."""
     if not data:
         raise AppError("image_empty", "The uploaded image is empty", 422)
@@ -32,7 +33,7 @@ def store_image(data: bytes, directory: Path, entry_id: int | str) -> str:
             img = ImageOps.exif_transpose(probe).convert("RGB")
     except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as exc:
         raise AppError("image_invalid", f"The upload is not a readable image. {describe(exc)}", 422) from exc
-    img.thumbnail((MAX_IMAGE_SIDE, MAX_IMAGE_SIDE))
+    img.thumbnail(max_size)
     directory.mkdir(parents=True, exist_ok=True)
     filename = f"{entry_id}-{secrets.token_hex(6)}.jpg"
     img.save(directory / filename, "JPEG", quality=92, optimize=True)
