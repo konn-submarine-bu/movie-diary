@@ -437,3 +437,22 @@ body[data-view=pieces] .pieces { display: grid; grid-template-columns: minmax(0,
 .pc-mact .lnk { font-size: 12px; }
 .pc-saved { color: var(--accent-text); letter-spacing: .06em; }
 @media (max-width: 920px) { body[data-view=pieces] .pieces { grid-template-columns: 1fr; } .pc-chat { position: static; } .pc-row { grid-template-columns: 1fr; } }
+
+.pc-mind { margin: 0 0 22px; padding: 14px 18px 12px; border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.pc-mind summary { display: flex; justify-content: space-between; align-items: baseline; cursor: pointer; font-family: var(--serif); font-size: 15px; letter-spacing: .2em; color: var(--accent-text); list-style: none; }
+.pc-mind summary::-webkit-details-marker { display: none; }
+.pc-mind-status { font-family: inherit; font-size: 12px; letter-spacing: .06em; color: var(--muted); }
+.pc-mind-intro { margin: 8px 0 4px; font-size: 12px; line-height: 1.7; color: var(--muted); }
+#pc-mind-body { max-height: 34vh; overflow-y: auto; scrollbar-width: thin; }
+.pc-mind-sec h4 { margin: 12px 0 4px; font-size: 12px; font-weight: 500; letter-spacing: .24em; color: var(--muted); }
+.pc-mind-sec ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.pc-mind-sec li { font-size: 14px; line-height: 1.75; }
+.pc-cites, .pc-disagree { font-size: 12px; color: var(--muted); margin-left: 2px; white-space: nowrap; }
+.pc-disagree { display: block; color: #e5786d; white-space: normal; }
+.pc-cite { font-size: 12px; color: var(--accent-text); margin-right: 4px; }
+.pc-cite:hover { text-decoration: underline; }
+.pc-mind-empty { margin: 10px 0 2px; }
+.pc-mind-err { margin: 10px 0 0; font-size: 12px; color: #e5786d; word-break: break-word; }
+.pc-mind-err .lnk { font-size: 12px; }
+@keyframes pc-flash { 0%, 100% { background: transparent; } 30% { background: color-mix(in srgb, var(--accent) 18%, transparent); } }
+.pc-card.flash { animation: pc-flash 1.6s ease; border-radius: 4px; }

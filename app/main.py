@@ -21,6 +21,7 @@ from .impressions import ImpressionService
 from .errors import AppError, describe
 from .llm import LLM, OpenAICompatLLM
 from .personas import PersonaService, mentioned, name_of, public as public_personas
+from .mind import Mind
 from .pieces import (MAX_CAPTION, PLATFORMS, STORE_SIZE, PieceChat, copy_image, public_message,
                      transcribe_piece, validate as validate_piece)
 from .poems import POETS, PoemService, style_of
@@ -159,7 +160,8 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
     persona_service = PersonaService(db, llm)
     film_page = FilmPage(db, tmdb, search, llm)
     collage_service = CollageService(settings, db, tmdb)
-    piece_chat = PieceChat(db, llm, settings.pieces_dir, settings.max_agent_steps)
+    mind = Mind(db, llm)
+    piece_chat = PieceChat(db, llm, settings.pieces_dir, settings.max_agent_steps, mind)
     wikiquote = wikiquote or Wikiquote()
 
     app = FastAPI(title="Movie Diary")
@@ -508,6 +510,16 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
                 raise AppError("image_too_large",
                                f"Image is larger than {MAX_IMAGE_BYTES // 1024 // 1024} MB", 413)
         return bytes(buf)
+
+    # The agent's own mind. The page calls /refresh after pieces change; it is not run inside the save request,
+    # so saving stays fast and a failed refresh never loses a piece.
+    @app.get("/api/pieces/mind")
+    def get_mind() -> dict[str, Any]:
+        return mind.state()
+
+    @app.post("/api/pieces/mind/refresh")
+    async def refresh_mind() -> dict[str, Any]:
+        return await mind.refresh()
 
     # Chat routes come before /api/pieces/{piece_id} so "chat" is not read as an id.
     @app.get("/api/pieces/chat")

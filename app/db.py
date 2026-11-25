@@ -109,6 +109,13 @@ CREATE TABLE IF NOT EXISTS pieces (
   ocr_error TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS piece_mind (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  mind TEXT NOT NULL,
+  seen TEXT NOT NULL,
+  error TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS piece_messages (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
@@ -584,6 +591,23 @@ class Database:
     def delete_piece(self, piece_id: int) -> None:
         with self._tx() as conn:
             conn.execute("DELETE FROM pieces WHERE id = ?", (piece_id,))
+
+    def get_mind(self) -> dict[str, Any]:
+        """The agent's mind (one row). `seen` maps piece id to the fingerprint it had when digested."""
+        with self._tx() as conn:
+            row = conn.execute("SELECT * FROM piece_mind WHERE id = 1").fetchone()
+        if row is None:
+            return {"mind": {"views": [], "tastes": [], "doubts": []}, "seen": {}, "error": "", "updated_at": ""}
+        return {"mind": json.loads(row["mind"]), "seen": json.loads(row["seen"]), "error": row["error"],
+                "updated_at": row["updated_at"]}
+
+    def put_mind(self, mind: dict[str, Any], seen: dict[str, str], error: str) -> None:
+        with self._tx() as conn:
+            conn.execute(
+                "INSERT INTO piece_mind (id, mind, seen, error, updated_at) VALUES (1, ?, ?, ?, ?)"
+                " ON CONFLICT(id) DO UPDATE SET mind = excluded.mind, seen = excluded.seen,"
+                " error = excluded.error, updated_at = excluded.updated_at",
+                (json.dumps(mind, ensure_ascii=False), json.dumps(seen), error, now_iso()))
 
     def add_piece_message(self, role: str, content: str, meta: dict[str, Any] | None = None) -> dict[str, Any]:
         with self._tx() as conn:

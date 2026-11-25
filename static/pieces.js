@@ -4,7 +4,8 @@
 (() => {
   const S = { mode: "text", file: null, platform: "", platforms: [], pieces: [], busy: false, loaded: false, chatTok: 0, editing: null,
     ocrEditing: null, retrying: new Set(), attach: null, attaching: false, sending: false };
-  const SUGGEST = ["我收藏的这些文字，有哪几个反复出现的主题？", "最近存的那段，帮我拆解一下", "关于这个话题，替我说一段：", "这些收藏里有没有互相矛盾的观点？"];
+  const SUGGEST = ["你最在意的是什么？", "你和我哪里想得不一样？", "最近读到的那段，改变了你什么？", "你现在最拿不准的是什么？"];
+  const MIND = { busy: false, again: false, state: null };
   // Chat images are pasted or dropped onto the chat column; pieces are pasted or dropped onto the form.
 
   function setMode(mode) {
@@ -163,10 +164,10 @@
       : el("blockquote", {}, p.text);
     const ask = el("button", { type: "button", class: "lnk", onclick: () => {
       const input = $("pc-chat-input");
-      input.value = `聊聊 #${p.id} 这段：`;
+      input.value = `你怎么看 #${p.id} 这段？`;
       input.focus();
-    } }, "聊这段");
-    return el("figure", { class: `pc-card ${p.kind}`, style: `--i:${Math.min(i, 12)}` },
+    } }, "问它这段");
+    return el("figure", { class: `pc-card ${p.kind}`, "data-id": p.id, style: `--i:${Math.min(i, 12)}` },
       body, source(p), noteView(p),
       el("div", { class: "pc-card-acts" }, ask),
       el("button", { type: "button", class: "x", "aria-label": "删除这条收藏", onclick: () => remove(p) }, "×"));
@@ -192,6 +193,62 @@
     S.pieces = res.pieces;
     if (!S.platforms.length) { S.platforms = res.platforms; renderPlatforms(); }
     renderList();
+    refreshMind();
+  }
+
+  /* ---- 它的想法 ---- */
+  function cite(ids) {
+    return ids.map((i) => el("button", { type: "button", class: "pc-cite", title: `看 #${i}`, onclick: () => jump(i) }, `#${i}`));
+  }
+  function jump(id) {
+    const node = document.querySelector(`.pc-card[data-id="${id}"]`);
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    node.classList.remove("flash");
+    void node.offsetWidth;
+    node.classList.add("flash");
+  }
+  function mindList(title, items) {
+    if (!items.length) return null;
+    return el("div", { class: "pc-mind-sec" }, el("h4", {}, title), el("ul", {}, ...items.map((it) => el("li", {},
+      it.text, " ", el("span", { class: "pc-cites" }, "来自 ", ...cite(it.sources)),
+      it.disagrees_with_note && it.disagrees_with_note.length
+        ? el("span", { class: "pc-disagree" }, "不同意你在 ", ...cite(it.disagrees_with_note), " 的批注") : null))));
+  }
+  function renderMind() {
+    const st = MIND.state;
+    if (!st) return;
+    const status = $("pc-mind-status");
+    if (MIND.busy) status.textContent = `正在读 ${st.pending} 条新变化…`;
+    else if (st.error) status.textContent = "上次没想完";
+    else status.textContent = st.updated_at ? `读过 ${st.total} 条` : "";
+    const body = $("pc-mind-body");
+    const m = st.mind;
+    const any = m.views.length || m.tastes.length || m.doubts.length;
+    const parts = any ? [mindList("我相信", m.views), mindList("我偏爱", m.tastes), mindList("我拿不准", m.doubts)]
+      : [el("p", { class: "muted pc-mind-empty" }, st.total ? "它还在读，暂时没形成看法。" : "它还什么都没读过。先在左边传一点东西给它。")];
+    if (st.error && !MIND.busy) {
+      parts.push(el("p", { class: "pc-mind-err" }, `更新失败：${st.error} `,
+        el("button", { type: "button", class: "lnk", onclick: () => refreshMind(true) }, "再试一次")));
+    }
+    body.replaceChildren(...parts.filter(Boolean));
+  }
+  async function refreshMind(force = false) {
+    if (MIND.busy) { MIND.again = true; return; }
+    try {
+      MIND.state = await api("GET", "/api/pieces/mind");
+      renderMind();
+      if (!MIND.state.pending || (MIND.state.error && !force)) return;
+      MIND.busy = true;
+      renderMind();
+      MIND.state = await api("POST", "/api/pieces/mind/refresh");
+    } catch (err) {
+      MIND.state = await api("GET", "/api/pieces/mind").catch(() => MIND.state);
+    } finally {
+      MIND.busy = false;
+      renderMind();
+      if (MIND.again) { MIND.again = false; refreshMind(); }
+    }
   }
 
   function saveButton(m) {
@@ -292,7 +349,7 @@
     }
   }
   async function onClear() {
-    if (!confirm("清空和「你收藏的」的对话？收藏本身不受影响。")) return;
+    if (!confirm("清空和它的对话？收藏和它的想法都不受影响。")) return;
     try {
       await api("DELETE", "/api/pieces/chat");
       $("pc-msgs").replaceChildren();

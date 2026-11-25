@@ -111,9 +111,14 @@
         <div class="pc-list" id="pc-list"></div>
       </div>
 
-      <section class="pc-chat" aria-label="和我聊聊">
+      <section class="pc-chat" aria-label="和它聊聊">
+        <details class="pc-mind" id="pc-mind" open>
+          <summary><span>它的想法</span><span class="pc-mind-status" id="pc-mind-status"></span></summary>
+          <p class="pc-mind-intro">它只读过你传进来的东西。下面这些看法、偏好和疑问，都是从那些收藏里长出来的，会随着你传的东西改变。</p>
+          <div id="pc-mind-body"></div>
+        </details>
         <div class="chat-head">
-          <span>和我聊聊 · 基于你收藏的文字</span>
+          <span>和它聊聊</span>
           <span class="chat-tools"><button type="button" id="pc-clear">清空对话</button></span>
         </div>
         <div class="pc-msgs" id="pc-msgs" aria-live="polite"></div>
@@ -123,7 +128,7 @@
         <form class="composer" id="pc-chat-form">
           <button type="button" id="pc-attach-btn" class="pc-clip" aria-label="发一张图片" title="发一张图片（也可以直接粘贴或拖进来）">＋图</button>
           <label class="sr-only" for="pc-chat-input">输入消息</label>
-          <textarea id="pc-chat-input" rows="1" maxlength="4000" placeholder="想聊哪个话题？或者让我替你说一段。也可以贴一张图"></textarea>
+          <textarea id="pc-chat-input" rows="1" maxlength="4000" placeholder="问问它怎么看，或者和它争一争。也可以贴一张图"></textarea>
           <button type="submit" id="pc-send" aria-label="发送">↵</button>
         </form>
       </section>

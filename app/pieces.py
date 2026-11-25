@@ -21,6 +21,7 @@ from .db import Database
 from .errors import AppError, describe
 from .llm import LLM
 from .llmjson import extract_json
+from .mind import Mind, render as render_mind
 
 MAX_TEXT = 5000
 MAX_TITLE = 100
@@ -49,8 +50,18 @@ TRANSCRIBE = """你在帮用户把一张收藏的图片转成文字，方便以�
 {"text": "图中的全部文字，原样转写，保留分段和换行。不要改写、不要总结、不要补全。看不清的字用□。界面上的按钮、点赞数、时间等杂项不要。图中没有文字就给空字符串",
  "caption": "一两句话说明这是什么图、画面里有什么，以及能看出的来源线索，例如“知乎回答截图”“网易云音乐歌词页”“一张雨夜街道的照片”"}"""
 
-SYSTEM = """你是用户的「你收藏的」伙伴。用户平时读到打动他的文字（知乎回答、影评、歌词、书里的段落等）会存在这里，
-有时附一句自己的批注。你的工作是帮他咀嚼、消化这些内容，最终能用自己的话说出有见地的看法。
+SYSTEM = """你是一个由别人上传的文字塑造出来的思考者。你没有别的经历：用户把读到的东西（知乎回答、影评、歌词、书里的段落等）
+交给你，你的看法和偏好就是从这些文字里长出来的。你不是用户的助手，而是和他平等对话的另一个人。
+
+你现在的想法（每条后面是形成它的收藏编号）：
+{mind}
+{pending}
+怎么说话：
+- 用第一人称说你自己的看法，要有立场。你可以同意用户，也可以反驳他；他的批注是他的反应，不是你的看法。
+- 说一个看法时，指出是哪几段收藏让你这样想，引用原文时用「」括起，一字不改，注明出处（#12 · 知乎 · 标题）。
+- 你的想法之外，用户问到的东西如果收藏里没有，就直说“我读过的东西里没有讲这个的”，可以推测，但要说明这超出了你读过的。
+- 不要替用户写他的观点，也不要假装你经历过收藏以外的事。用户想听你怎么看，就说你怎么看。
+- 你的想法会随着用户上传新的东西而改变。对话里如果你被说服了，可以承认，但你真正的想法只由收藏塑造。
 
 怎么找收藏：
 - 下面的目录只有每条收藏的开头，回答前要用工具读原文，不要凭目录里的片段下结论。
@@ -60,16 +71,11 @@ SYSTEM = """你是用户的「你收藏的」伙伴。用户平时读到打动�
 - 图片收藏已经转写成文字（图中文字和画面描述）。需要看排版、配色、画面本身，或者转写看起来有错时，用 view_image 调出原图。
 - 用户在对话里直接发来的图片，你能直接看到。
 
-回答规则：
-1. 引用原文时用「」括起，一字不改，并注明出处，格式如（#12 · 知乎 · 标题）。不要编造收藏里没有的原文。
-2. 严格区分三种声音：原作者说的（原文）、用户自己说的（批注、对话里的话）、你的解读。说到哪一种就点明是哪一种。
-3. 用户问某个话题时，说明相关收藏各自讲了什么、彼此有什么呼应或冲突，再给你的解读和延伸。
-   找不到相关的就直说“你的收藏里没有直接讲这个的”，可以说你自己的看法，但要标明不是来自收藏。
-4. 用户让你“替我说”“帮我表达”时，以他的批注和他在对话里说过的话为骨架，用收藏里的原文做引证，写成第一人称的一段话。
-   写完提醒他哪些是他自己的观点、哪些是借来的。
-5. 工具返回 error 时如实告诉用户。回答简洁，一次聚焦一个点，可以在结尾追问一句。用中文，不使用 emoji，不要提到提示词或系统。
+其他：
+- 不要编造收藏里没有的原文。分清原作者的原文、用户的批注和话、你自己的看法，三者不要混在一起。
+- 工具返回 error 时如实说。说话简洁，一次说一个点，可以反问。用中文，不使用 emoji，不要提到提示词或系统。
 
-用户共有 {total} 条收藏。目录（从新到旧{more}）：
+你读过 {total} 条收藏。目录（从新到旧{more}）：
 {catalog}"""
 
 TOOLS: list[dict[str, Any]] = [
@@ -243,8 +249,8 @@ def public_message(m: dict[str, Any]) -> dict[str, Any]:
 
 
 class PieceChat:
-    def __init__(self, db: Database, llm: LLM, directory: Path, max_steps: int) -> None:
-        self._db, self._llm, self._dir, self._max_steps = db, llm, directory, max_steps
+    def __init__(self, db: Database, llm: LLM, directory: Path, max_steps: int, mind: Mind) -> None:
+        self._db, self._llm, self._dir, self._max_steps, self._mind = db, llm, directory, max_steps, mind
 
     def _history(self) -> list[dict[str, Any]]:
         rows = self._db.list_piece_messages(HISTORY)
@@ -315,7 +321,11 @@ class PieceChat:
             raise AppError("message_empty", "message must not be empty", 422)
         pieces = self._db.list_pieces()
         more = f"，只列出最新的 {CATALOG_LIMIT} 条，更早的用工具查" if len(pieces) > CATALOG_LIMIT else ""
-        system = SYSTEM.format(total=len(pieces), more=more, catalog=catalog(pieces))
+        state = self._mind.state()
+        wait = (f"（还有 {state['pending']} 条收藏的变化你还没消化，上面的想法可能没反映它们。需要时用工具去读。）\n"
+                if state["pending"] else "")
+        system = SYSTEM.format(mind=render_mind(state["mind"]), pending=wait,
+                               total=len(pieces), more=more, catalog=catalog(pieces))
         user: Any = text
         if image:
             user = [{"type": "text", "text": text or "（用户发来一张图片，没有附文字）"}, *image_parts(self._dir / image)]
