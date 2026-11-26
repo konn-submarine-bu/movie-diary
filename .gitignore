@@ -5,4 +5,17 @@ __pycache__/
 diary.sqlite3*
 posters/
 clips/
+/pieces/
 .DS_Store
+
+!.omc/
+**/.omc/*
+!.omc/skills/
+!.omc/skills/**
+!.omc/rules/
+!.omc/rules/**
+!.omc/repo-mem/
+.omc/repo-mem/*
+!.omc/repo-mem/project-profile.md
+!.omc/repo-mem/error-patterns.md
+.omc/repo-mem/local-personal-context.md
