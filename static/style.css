@@ -372,8 +372,8 @@ body[data-view=clips] .clipwall { display: block; columns: 280px; column-gap: 40
 /* ---- 「你收藏的」 ---- */
 .pieces { display: none; }
 body[data-view=pieces] .main { display: none; }
-body[data-view=pieces] .pieces { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 520px); gap: clamp(36px, 6vw, 96px); align-items: start; padding: 26px 0 80px; }
-.pc-add { display: grid; gap: 14px; max-width: 40em; padding: 18px 20px; border: 1px solid color-mix(in srgb, var(--muted) 22%, transparent); border-radius: 12px; transition: border-color .3s, background .3s; }
+body[data-view=pieces] .pieces { display: block; padding: 18px 0 80px; }
+.pc-add { display: grid; gap: 14px; padding: 18px 20px; border: 1px solid color-mix(in srgb, var(--muted) 22%, transparent); border-radius: 12px; transition: border-color .3s, background .3s; }
 .pc-add.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .pc-modes { display: flex; gap: 22px; font-size: 13px; letter-spacing: .12em; }
 .pc-modes button { color: var(--muted); transition: color .3s; }
@@ -390,8 +390,11 @@ body[data-view=pieces] .pieces { display: grid; grid-template-columns: minmax(0,
 .pc-drop img { flex-basis: 100%; max-height: 220px; width: auto; max-width: 100%; object-fit: contain; border-radius: 6px; }
 .pc-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .pc-plats button { font-size: 12px; padding: 3px 10px; }
-.pc-acts { display: flex; justify-content: flex-end; }
-.pc-count { margin: 30px 0 0; font-size: 12px; letter-spacing: .2em; color: var(--muted); }
+.pc-acts { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.pc-acts .muted { margin: 0; font-size: 12px; }
+.pc-listhead { display: flex; align-items: baseline; gap: 16px; margin: 38px 0 0; }
+.pc-count { margin: 0; font-size: 12px; letter-spacing: .2em; color: var(--muted); }
+.pc-filter button { font-size: 12px; padding: 2px 10px; }
 .pc-list { columns: 300px; column-gap: 36px; margin-top: 16px; }
 .pc-card { position: relative; break-inside: avoid; margin: 0 0 34px; padding: 4px 30px 4px 18px; border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); animation: rise .8s backwards; animation-delay: calc(var(--i) * 40ms); }
 .pc-card blockquote { margin: 0; font-family: var(--serif); font-size: 17px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; max-height: 16em; overflow-y: auto; scrollbar-width: thin; }
@@ -408,9 +411,18 @@ body[data-view=pieces] .pieces { display: grid; grid-template-columns: minmax(0,
 .pc-card-acts .lnk { font-size: 12px; opacity: .55; }
 .pc-card:hover .x, .pc-card .x:focus-visible { opacity: 1; }
 .pc-card.image .x { background: color-mix(in srgb, var(--bg) 70%, transparent); top: 4px; right: 4px; }
-.pc-chat { position: sticky; top: 20px; }
-.pc-msgs { height: min(56vh, 560px); overflow-y: auto; display: grid; align-content: start; gap: 14px; padding: 18px 0 8px; scrollbar-width: thin; }
+.pc-chat { min-width: 0; }
+.pc-msgs { height: min(62vh, 640px); overflow-y: auto; display: grid; align-content: start; gap: 14px; padding: 18px 0 8px; scrollbar-width: thin; }
 .pc-msgs .m.u span { white-space: pre-wrap; }
+.pc-thinking { display: flex; align-items: flex-end; gap: 8px; width: fit-content; color: var(--muted); font-size: 12px; letter-spacing: .08em; }
+.pc-thinking svg { display: block; flex: none; }
+.pc-thinking span { padding-bottom: 5px; }
+@media (prefers-reduced-motion: no-preference) {
+  .xm-shoots { --shoot-start: .18; transform-box: view-box; transform-origin: 0 49px; animation: xm-sprout .85s cubic-bezier(.23,.72,.34,1) both; }
+  .xm-shoots-mid { --shoot-start: 0; animation-delay: .38s; }
+  .xm-shoots-late { --shoot-start: 0; animation-delay: .83s; }
+}
+@keyframes xm-sprout { from { transform: scaleY(var(--shoot-start)); } to { transform: scaleY(1); } }
 .pc-ocr { margin-top: 10px; font-size: 13px; color: var(--muted); }
 .pc-ocr summary { cursor: pointer; letter-spacing: .1em; font-size: 12px; }
 .pc-ocr summary:hover { color: var(--accent-text); }
@@ -436,14 +448,7 @@ body[data-view=pieces] .pieces { display: grid; grid-template-columns: minmax(0,
 .pc-mact { font-size: 12px; margin-bottom: 4px; }
 .pc-mact .lnk { font-size: 12px; }
 .pc-saved { color: var(--accent-text); letter-spacing: .06em; }
-@media (max-width: 920px) { body[data-view=pieces] .pieces { grid-template-columns: 1fr; } .pc-chat { position: static; } .pc-row { grid-template-columns: 1fr; } }
 
-.pc-mind { margin: 0 0 22px; padding: 14px 18px 12px; border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--accent) 5%, transparent); }
-.pc-mind summary { display: flex; justify-content: space-between; align-items: baseline; cursor: pointer; font-family: var(--serif); font-size: 15px; letter-spacing: .2em; color: var(--accent-text); list-style: none; }
-.pc-mind summary::-webkit-details-marker { display: none; }
-.pc-mind-status { font-family: inherit; font-size: 12px; letter-spacing: .06em; color: var(--muted); }
-.pc-mind-intro { margin: 8px 0 4px; font-size: 12px; line-height: 1.7; color: var(--muted); }
-#pc-mind-body { max-height: 34vh; overflow-y: auto; scrollbar-width: thin; }
 .pc-mind-sec h4 { margin: 12px 0 4px; font-size: 12px; font-weight: 500; letter-spacing: .24em; color: var(--muted); }
 .pc-mind-sec ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
 .pc-mind-sec li { font-size: 14px; line-height: 1.75; }
@@ -456,3 +461,72 @@ body[data-view=pieces] .pieces { display: grid; grid-template-columns: minmax(0,
 .pc-mind-err .lnk { font-size: 12px; }
 @keyframes pc-flash { 0%, 100% { background: transparent; } 30% { background: color-mix(in srgb, var(--accent) 18%, transparent); } }
 .pc-card.flash { animation: pc-flash 1.6s ease; border-radius: 4px; }
+
+/* ---- two panes: 收藏 / 小满 ---- */
+.pc-switch { display: flex; gap: 10px; margin: 0 0 30px; padding: 5px; width: fit-content; border: 1px solid color-mix(in srgb, var(--muted) 22%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--bg) 60%, transparent); backdrop-filter: blur(8px); }
+.pc-switch button { display: flex; align-items: center; gap: 10px; padding: 9px 22px 9px 18px; border-radius: 999px; color: var(--muted); transition: background .35s, color .35s; }
+.pc-switch button b { font-family: var(--serif); font-size: 16px; font-weight: 600; letter-spacing: .24em; }
+.pc-switch button span { font-size: 12px; letter-spacing: .04em; opacity: .8; }
+.pc-switch button:hover { color: var(--text); }
+.pc-switch button[aria-selected=true] { color: var(--accent-text); background: color-mix(in srgb, var(--accent) 13%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 34%, transparent); }
+.pc-pane[hidden] { display: none !important; }
+.pc-pane { animation: rise .6s cubic-bezier(.2,.7,.2,1) backwards; }
+
+.pc-store { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: clamp(32px, 5vw, 72px); align-items: start; }
+.pc-store-main { min-width: 0; }
+.pc-overview { position: sticky; top: 22px; font-size: 13px; }
+.pc-overview h4 { margin: 26px 0 10px; font-size: 12px; font-weight: 500; letter-spacing: .3em; color: var(--muted); }
+.pc-overview h4:first-child { margin-top: 4px; }
+.ov-empty { margin: 0; line-height: 1.8; color: var(--muted); }
+.ov-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 12px; }
+.ov-stat b { display: block; font-family: var(--serif); font-size: 30px; font-weight: 300; line-height: 1.1; color: var(--text); font-variant-numeric: tabular-nums; }
+.ov-stat span { font-size: 12px; color: var(--muted); letter-spacing: .1em; }
+.ov-stat:first-child b { color: var(--accent-text); }
+.ov-mind { margin: 16px 0 0; padding-left: 10px; border-left: 2px solid color-mix(in srgb, var(--accent) 50%, transparent); font-size: 12px; line-height: 1.7; color: var(--muted); }
+.ov-plats, .ov-recent { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.ov-plats button { display: grid; grid-template-columns: 5.5em 1fr auto; align-items: center; gap: 10px; width: 100%; padding: 4px 6px; border-radius: 6px; color: var(--text); text-align: left; transition: background .3s; }
+.ov-plats button:hover, .ov-plats button[aria-pressed=true] { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.ov-plats button[aria-pressed=true] span { color: var(--accent-text); }
+.ov-plats span { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-plats i { height: 3px; border-radius: 2px; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 30%, transparent)); width: var(--w); }
+.ov-plats b { font-size: 12px; font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ov-recent button { display: flex; gap: 6px; align-items: baseline; width: 100%; padding: 3px 6px; border-radius: 6px; text-align: left; font-size: 13px; color: var(--text); opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: background .3s, opacity .3s; }
+.ov-recent button:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); opacity: 1; }
+.ov-recent em { font-style: normal; font-size: 11px; color: var(--accent-text); }
+.ov-recent small { font-size: 10px; padding: 0 4px; border: 1px solid color-mix(in srgb, var(--muted) 40%, transparent); border-radius: 3px; color: var(--muted); }
+
+.pc-talk { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: clamp(32px, 5vw, 80px); align-items: start; }
+.xm { position: sticky; top: 22px; }
+.xm-id { display: flex; align-items: center; gap: 18px; }
+.xm-id h3 { margin: 0; font-family: var(--serif); font-size: 26px; font-weight: 600; letter-spacing: .3em; }
+.xm-status { margin: 4px 0 0; font-size: 12px; letter-spacing: .06em; color: var(--muted); }
+.xm-intro { margin: 18px 0 6px; font-size: 12px; line-height: 1.8; color: var(--muted); }
+.xm-mind { max-height: calc(100vh - 300px); overflow-y: auto; scrollbar-width: thin; padding-right: 6px; }
+.pc-talk .pc-msgs { height: calc(100vh - 360px); min-height: 320px; }
+
+/* 小满: a point of light. --g (0..1, from pieces read) sets size and rings; --l (0..1, from mind items) sets glow. */
+.xm-orb { --g: 0; --l: 0; --s: calc(44px + var(--g) * 26px); position: relative; flex: none; width: var(--s); height: var(--s); border-radius: 50%;
+  background: radial-gradient(circle at 36% 32%, #fff 0 6%, color-mix(in srgb, var(--accent) 85%, #fff) 16%, var(--accent) 42%, color-mix(in srgb, var(--accent) 30%, transparent) 70%, transparent 72%);
+  box-shadow: 0 0 calc(18px + var(--l) * 36px) calc(2px + var(--l) * 10px) color-mix(in srgb, var(--accent) calc(30% + var(--l) * 40%), transparent);
+  animation: xm-float 6s ease-in-out infinite; transition: width 1.2s, height 1.2s, box-shadow 1.2s; }
+.xm-orb::before, .xm-orb::after { content: ""; position: absolute; inset: calc(-6px - var(--g) * 10px); border-radius: 50%; border: 1px solid color-mix(in srgb, var(--accent) calc(10% + var(--g) * 30%), transparent); opacity: calc(.3 + var(--g) * .7); animation: xm-ring 9s linear infinite; }
+.xm-orb::after { inset: calc(-14px - var(--g) * 18px); border-style: dashed; opacity: calc(var(--g) * .8); animation-duration: 16s; animation-direction: reverse; }
+.xm-orb.thinking { animation: xm-breathe 1.6s ease-in-out infinite; }
+.xm-orb.sm { --s: 16px; animation: none; box-shadow: 0 0 10px 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.xm-orb.sm::before, .xm-orb.sm::after { display: none; }
+@keyframes xm-float { 50% { transform: translateY(-3px); } }
+@keyframes xm-breathe { 50% { transform: scale(.86); filter: brightness(1.25); } }
+@keyframes xm-ring { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .xm-orb, .xm-orb::before, .xm-orb::after { animation: none !important; } }
+
+@media (max-width: 920px) {
+  .pc-store, .pc-talk { grid-template-columns: 1fr; }
+  .pc-overview, .xm { position: static; }
+  .xm-mind { max-height: none; }
+  .pc-talk .pc-msgs { height: 56vh; }
+  .pc-row { grid-template-columns: 1fr; }
+  .pc-switch button span { display: none; }
+  .pc-store-main { order: -1; }
+  .pc-overview { position: static; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--muted) 18%, transparent); }
+  .ov-stats { grid-template-columns: repeat(4, 1fr); }
+}

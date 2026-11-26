@@ -81,57 +81,106 @@
     <section class="wish" id="wish" aria-label="想看清单"></section>
     <section class="clipwall" id="clipwall" aria-label="片中拾句：台词、截图与诗"></section>
 
-    <section class="pieces" id="pieces" aria-label="你收藏的">
-      <div class="pc-left">
-        <form class="pc-add" id="pc-form">
-          <div class="pc-modes" role="group" aria-label="收藏类型">
-            <button type="button" data-pcmode="text" aria-pressed="true">粘贴文字</button>
-            <button type="button" data-pcmode="image" aria-pressed="false">上传图片</button>
+    <section class="pieces" id="pieces" aria-label="你收藏的" data-pane="store">
+      <nav class="pc-switch" role="tablist" aria-label="收藏或和小满聊">
+        <button type="button" role="tab" id="pc-tab-store" aria-controls="pc-store" data-pane="store" aria-selected="true">
+          <b>收藏</b><span id="pc-tab-count">把读到的东西交给小满</span>
+        </button>
+        <button type="button" role="tab" id="pc-tab-talk" aria-controls="pc-talk" data-pane="talk" aria-selected="false">
+          <i class="xm-orb sm" aria-hidden="true"></i><b>小满</b><span id="pc-tab-mood">和小满聊聊</span>
+        </button>
+      </nav>
+
+      <div class="pc-pane pc-store" id="pc-store" role="tabpanel" aria-labelledby="pc-tab-store">
+        <aside class="pc-overview" id="pc-overview" aria-label="收藏概览"></aside>
+        <div class="pc-store-main">
+          <form class="pc-add" id="pc-form">
+            <div class="pc-modes" role="group" aria-label="收藏类型">
+              <button type="button" data-pcmode="text" aria-pressed="true">粘贴文字</button>
+              <button type="button" data-pcmode="image" aria-pressed="false">上传图片</button>
+            </div>
+            <label class="sr-only" for="pc-text">原文</label>
+            <textarea id="pc-text" rows="4" maxlength="5000" placeholder="把打动你的那段话粘贴在这里：一段知乎回答、一段影评、几句歌词…"></textarea>
+            <div class="pc-drop" id="pc-drop" hidden>
+              <button type="button" id="pc-pick" class="lnk">选择图片</button>
+              <span id="pc-file" class="muted">也可以直接把图片拖到这里，或粘贴截图</span>
+              <img id="pc-preview" alt="" hidden>
+            </div>
+            <div class="chips pc-plats" id="pc-plats" role="group" aria-label="来自哪个平台（可选）"></div>
+            <div class="pc-row">
+              <label class="sr-only" for="pc-title">标题</label>
+              <input id="pc-title" type="text" maxlength="100" placeholder="标题或作者（可选）" autocomplete="off">
+              <label class="sr-only" for="pc-url">链接</label>
+              <input id="pc-url" type="url" maxlength="500" placeholder="链接（可选）" autocomplete="off">
+            </div>
+            <label class="sr-only" for="pc-note">批注</label>
+            <input id="pc-note" type="text" maxlength="500" placeholder="这段话哪里打动了你？随手写一句（可选）" autocomplete="off">
+            <div id="pc-error" class="error" role="alert" hidden></div>
+            <div class="pc-acts"><span class="muted" id="pc-hint">交给小满之后，小满会读一遍，看法也许会变</span><button type="submit" id="pc-submit" class="lnk strong">交给小满</button></div>
+          </form>
+          <div class="pc-listhead">
+            <p class="pc-count" id="pc-count"></p>
+            <div class="chips pc-filter" id="pc-filter" role="group" aria-label="按平台筛选"></div>
           </div>
-          <label class="sr-only" for="pc-text">原文</label>
-          <textarea id="pc-text" rows="4" maxlength="5000" placeholder="把打动你的那段话粘贴在这里：一段知乎回答、一段影评、几句歌词…"></textarea>
-          <div class="pc-drop" id="pc-drop" hidden>
-            <button type="button" id="pc-pick" class="lnk">选择图片</button>
-            <span id="pc-file" class="muted">也可以直接把图片拖到这里，或粘贴截图</span>
-            <img id="pc-preview" alt="" hidden>
-          </div>
-          <div class="chips pc-plats" id="pc-plats" role="group" aria-label="来自哪个平台（可选）"></div>
-          <div class="pc-row">
-            <label class="sr-only" for="pc-title">标题</label>
-            <input id="pc-title" type="text" maxlength="100" placeholder="标题或作者（可选）" autocomplete="off">
-            <label class="sr-only" for="pc-url">链接</label>
-            <input id="pc-url" type="url" maxlength="500" placeholder="链接（可选）" autocomplete="off">
-          </div>
-          <label class="sr-only" for="pc-note">批注</label>
-          <input id="pc-note" type="text" maxlength="500" placeholder="它哪里打动了你？随手写一句（可选）" autocomplete="off">
-          <div id="pc-error" class="error" role="alert" hidden></div>
-          <div class="pc-acts"><button type="submit" id="pc-submit" class="lnk strong">收进来</button></div>
-        </form>
-        <p class="pc-count" id="pc-count"></p>
-        <div class="pc-list" id="pc-list"></div>
+          <div class="pc-list" id="pc-list"></div>
+        </div>
       </div>
 
-      <section class="pc-chat" aria-label="和它聊聊">
-        <details class="pc-mind" id="pc-mind" open>
-          <summary><span>它的想法</span><span class="pc-mind-status" id="pc-mind-status"></span></summary>
-          <p class="pc-mind-intro">它只读过你传进来的东西。下面这些看法、偏好和疑问，都是从那些收藏里长出来的，会随着你传的东西改变。</p>
-          <div id="pc-mind-body"></div>
-        </details>
-        <div class="chat-head">
-          <span>和它聊聊</span>
-          <span class="chat-tools"><button type="button" id="pc-clear">清空对话</button></span>
-        </div>
-        <div class="pc-msgs" id="pc-msgs" aria-live="polite"></div>
-        <div id="pc-chat-error" class="error" role="alert" hidden></div>
-        <div class="chips" id="pc-sug"></div>
-        <div class="pc-attach" id="pc-attach" hidden></div>
-        <form class="composer" id="pc-chat-form">
-          <button type="button" id="pc-attach-btn" class="pc-clip" aria-label="发一张图片" title="发一张图片（也可以直接粘贴或拖进来）">＋图</button>
-          <label class="sr-only" for="pc-chat-input">输入消息</label>
-          <textarea id="pc-chat-input" rows="1" maxlength="4000" placeholder="问问它怎么看，或者和它争一争。也可以贴一张图"></textarea>
-          <button type="submit" id="pc-send" aria-label="发送">↵</button>
-        </form>
-      </section>
+      <div class="pc-pane pc-talk" id="pc-talk" role="tabpanel" aria-labelledby="pc-tab-talk" hidden>
+        <aside class="xm" aria-label="小满的想法">
+          <div class="xm-id">
+            <i class="xm-orb" id="xm-orb" aria-hidden="true"></i>
+            <div>
+              <h3>小满</h3>
+              <p class="xm-status" id="pc-mind-status"></p>
+            </div>
+          </div>
+          <p class="xm-intro">小满的看法从收藏和你允许参与成长的对话里长出来。关于你的长期记忆，只保留你主动确认的内容。</p>
+          <div class="xm-mind" id="pc-mind-body"></div>
+        </aside>
+        <section class="pc-chat" aria-label="和小满聊聊">
+          <div class="chat-head">
+            <span>和小满聊聊</span>
+            <span class="chat-tools"><button type="button" id="pc-clear">清空对话</button></span>
+          </div>
+          <div class="pc-msgs" id="pc-msgs" aria-live="polite"></div>
+          <template id="pc-thinking">
+            <div class="pc-thinking">
+              <svg viewBox="0 0 112 56" width="104" height="52" aria-hidden="true">
+                <ellipse cx="56" cy="49" rx="51" ry="5" fill="currentColor" opacity=".14"/>
+                <ellipse cx="54" cy="48.5" rx="35" ry="2.7" fill="currentColor" opacity=".18"/>
+                <g class="xm-shoots" fill="#6a9d54">
+                  <path d="M34 49C32 39 25 30 16 27c7 6 11 14 13 22z"/>
+                  <path d="M52 49C53 38 50 26 45 21c2 9 2 19 1 28z"/>
+                  <path d="M63 49c4-8 11-12 19-14-5 4-10 8-13 14z"/>
+                </g>
+                <g class="xm-shoots xm-shoots-mid" fill="#498053">
+                  <path d="M43 49C42 32 33 19 25 15c5 8 10 21 11 34z"/>
+                  <path d="M58 49C57 29 61 14 70 5c-5 13-6 28-6 44z"/>
+                  <path d="M72 49c5-14 16-23 28-25-9 5-16 14-20 25z"/>
+                </g>
+                <g class="xm-shoots xm-shoots-late" fill="#8fb864">
+                  <path d="M28 49c-3-6-10-9-17-10 5 3 9 6 11 10z"/>
+                  <path d="M49 49c-3-10-2-21 4-28-2 10-1 19 2 28z"/>
+                  <path d="M65 49c5-13 9-24 21-29-7 8-11 19-14 29z"/>
+                  <path d="M81 49c5-5 11-7 19-7-6 2-9 4-13 7z"/>
+                </g>
+              </svg>
+              <span>小满在想…</span>
+            </div>
+          </template>
+          <div id="pc-chat-error" class="error" role="alert" hidden></div>
+          <div class="chips" id="pc-sug"></div>
+          <div class="pc-attach" id="pc-attach" hidden></div>
+          <label class="pc-growth-opt muted"><input type="checkbox" id="pc-use-for-growth"> 让这条文字参与小满的成长</label>
+          <form class="composer" id="pc-chat-form">
+            <button type="button" id="pc-attach-btn" class="pc-clip" aria-label="发一张图片" title="发一张图片（也可以直接粘贴或拖进来）">＋图</button>
+            <label class="sr-only" for="pc-chat-input">输入消息</label>
+            <textarea id="pc-chat-input" rows="1" maxlength="4000" placeholder="问问小满怎么看，或者和小满争一争。也可以贴一张图"></textarea>
+            <button type="submit" id="pc-send" aria-label="发送">↵</button>
+          </form>
+        </section>
+      </div>
       <input type="file" id="pc-image" accept="image/*" hidden>
       <input type="file" id="pc-chat-image" accept="image/*" hidden>
     </section>

@@ -7,6 +7,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from . import growth_store
 from .errors import AppError
 
 SCHEMA = """
@@ -192,6 +193,7 @@ def _poster(row: sqlite3.Row) -> dict[str, Any]:
 class Database:
     def __init__(self, path: Path) -> None:
         self.path = path
+        self.growth = growth_store.GrowthStore(self._tx)
         path.parent.mkdir(parents=True, exist_ok=True)
         with self._tx() as conn:
             conn.executescript(SCHEMA)
@@ -205,6 +207,11 @@ class Database:
             for col, decl in PIECE_COLUMNS.items():  # pieces tables created before image transcription
                 if col not in have:
                     conn.execute(f"ALTER TABLE pieces ADD COLUMN {col} {decl}")
+            if "growth_version" not in have:
+                conn.execute("ALTER TABLE pieces ADD COLUMN growth_version INTEGER NOT NULL DEFAULT 1")
+            conn.executescript(growth_store.SCHEMA)
+            conn.execute("INSERT OR IGNORE INTO growth_jobs (kind, source_id, version)"
+                         " SELECT 'piece', id, growth_version FROM pieces WHERE trim(text)!='' OR trim(caption)!=''")
 
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Connection]:
@@ -562,6 +569,8 @@ class Database:
             cur = conn.execute(f"INSERT INTO pieces ({', '.join(values)}) VALUES ({', '.join('?' for _ in values)})",
                                list(values.values()))
             row = conn.execute("SELECT * FROM pieces WHERE id = ?", (cur.lastrowid,)).fetchone()
+            if row["text"].strip() or row["caption"].strip():
+                growth_store.enqueue(conn, "piece", row["id"], row["growth_version"])
         return _piece(row)
 
     def get_piece(self, piece_id: int) -> dict[str, Any] | None:
@@ -582,39 +591,46 @@ class Database:
     def update_piece(self, piece_id: int, patch: dict[str, Any]) -> dict[str, Any] | None:
         values = {k: v for k, v in patch.items() if k in PIECE_FIELDS and k not in ("kind", "filename")}
         with self._tx() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            previous = conn.execute("SELECT * FROM pieces WHERE id=?", (piece_id,)).fetchone()
+            if previous is None:
+                return None
+            changed = any(previous[key] != value for key, value in values.items()
+                          if key not in ("ocr_status", "ocr_error"))
+            if changed:
+                growth_store.invalidate(conn, "piece", piece_id)
+                values["growth_version"] = previous["growth_version"] + 1
             if values:
                 sets = ", ".join(f"{k} = ?" for k in values)
                 conn.execute(f"UPDATE pieces SET {sets} WHERE id = ?", [*values.values(), piece_id])
             row = conn.execute("SELECT * FROM pieces WHERE id = ?", (piece_id,)).fetchone()
-        return _piece(row) if row else None
+            if changed and (row["text"].strip() or row["caption"].strip()):
+                growth_store.enqueue(conn, "piece", piece_id, row["growth_version"])
+        return _piece(row)
 
     def delete_piece(self, piece_id: int) -> None:
         with self._tx() as conn:
             conn.execute("DELETE FROM pieces WHERE id = ?", (piece_id,))
+            growth_store.invalidate(conn, "piece", piece_id)
 
-    def get_mind(self) -> dict[str, Any]:
-        """The agent's mind (one row). `seen` maps piece id to the fingerprint it had when digested."""
+    def add_piece_turn(self, text: str, image: str, reply: str, meta: dict[str, Any],
+                       *, use_for_growth: bool, expected_epoch: int) -> tuple[dict[str, Any], dict[str, Any]]:
         with self._tx() as conn:
-            row = conn.execute("SELECT * FROM piece_mind WHERE id = 1").fetchone()
-        if row is None:
-            return {"mind": {"views": [], "tastes": [], "doubts": []}, "seen": {}, "error": "", "updated_at": ""}
-        return {"mind": json.loads(row["mind"]), "seen": json.loads(row["seen"]), "error": row["error"],
-                "updated_at": row["updated_at"]}
-
-    def put_mind(self, mind: dict[str, Any], seen: dict[str, str], error: str) -> None:
-        with self._tx() as conn:
-            conn.execute(
-                "INSERT INTO piece_mind (id, mind, seen, error, updated_at) VALUES (1, ?, ?, ?, ?)"
-                " ON CONFLICT(id) DO UPDATE SET mind = excluded.mind, seen = excluded.seen,"
-                " error = excluded.error, updated_at = excluded.updated_at",
-                (json.dumps(mind, ensure_ascii=False), json.dumps(seen), error, now_iso()))
-
-    def add_piece_message(self, role: str, content: str, meta: dict[str, Any] | None = None) -> dict[str, Any]:
-        with self._tx() as conn:
-            cur = conn.execute("INSERT INTO piece_messages (role, content, meta, created_at) VALUES (?, ?, ?, ?)",
-                               (role, content, json.dumps(meta or {}, ensure_ascii=False), now_iso()))
-            row = conn.execute("SELECT * FROM piece_messages WHERE id = ?", (cur.lastrowid,)).fetchone()
-        return _message(row)
+            conn.execute("BEGIN IMMEDIATE")
+            if growth_store.epoch(conn) != expected_epoch:
+                raise AppError("mind_source_changed", "回答期间来源已改变，请重试。", 409)
+            stamp = now_iso()
+            rows = []
+            user_meta = {"image": image} if image else {}
+            if use_for_growth:
+                user_meta["use_for_growth"] = True
+            for role, content, info in (("user", text, user_meta), ("assistant", reply, meta)):
+                cur = conn.execute("INSERT INTO piece_messages (role, content, meta, created_at) VALUES (?, ?, ?, ?)",
+                                   (role, content, json.dumps(info, ensure_ascii=False), stamp))
+                rows.append(conn.execute("SELECT * FROM piece_messages WHERE id=?", (cur.lastrowid,)).fetchone())
+            if use_for_growth and text.strip():
+                growth_store.enqueue(conn, "chat", rows[0]["id"], 1)
+        return _message(rows[0]), _message(rows[1])
 
     def get_piece_message(self, message_id: int) -> dict[str, Any] | None:
         with self._tx() as conn:
@@ -635,6 +651,7 @@ class Database:
     def clear_piece_messages(self) -> None:
         with self._tx() as conn:
             conn.execute("DELETE FROM piece_messages")
+            growth_store.invalidate(conn, "chat")
 
     # film info cache ---------------------------------------------------
     def get_film_info(self, tmdb_id: int) -> tuple[dict[str, Any], str] | None:

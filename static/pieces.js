@@ -1,13 +1,26 @@
 "use strict";
-/* 「你收藏的」: save texts and images from outside the diary, and chat about them.
+/* 「你收藏的」: two panes. 收藏 saves texts and images; 小满 is the thinker shaped by them, with a mind and a chat.
    Loaded after app.js and shares its globals ($, el, api, ApiError, showError, clearError, renderText, openImage). */
 (() => {
   const S = { mode: "text", file: null, platform: "", platforms: [], pieces: [], busy: false, loaded: false, chatTok: 0, editing: null,
-    ocrEditing: null, retrying: new Set(), attach: null, attaching: false, sending: false };
-  const SUGGEST = ["你最在意的是什么？", "你和我哪里想得不一样？", "最近读到的那段，改变了你什么？", "你现在最拿不准的是什么？"];
-  const MIND = { busy: false, again: false, state: null };
+    ocrEditing: null, retrying: new Set(), attach: null, attaching: false, sending: false, clearing: false, pane: "store", filter: "" };
+  const SUGGEST = ["小满，你最在意的是什么？", "你和我哪里想得不一样？", "最近读到的那段，改变了你什么？", "你现在最拿不准的是什么？"];
+  const MIND = { busy: false, again: false, state: null, timer: 0 };
   // Chat images are pasted or dropped onto the chat column; pieces are pasted or dropped onto the form.
 
+  function setPane(pane, focus = true) {
+    S.pane = pane;
+    $("pieces").dataset.pane = pane;
+    document.querySelectorAll(".pc-switch [data-pane]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.pane === pane)));
+    $("pc-store").hidden = pane !== "store";
+    $("pc-talk").hidden = pane !== "talk";
+    try { localStorage.setItem("pc-pane", pane); } catch { /* storage off */ }
+    if (pane === "talk") {
+      const box = $("pc-msgs");
+      box.scrollTop = box.scrollHeight;
+      if (focus) $("pc-chat-input").focus();
+    }
+  }
   function setMode(mode) {
     S.mode = mode;
     document.querySelectorAll("[data-pcmode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.pcmode === mode)));
@@ -68,7 +81,7 @@
     try {
       if (S.mode === "text") await api("POST", "/api/pieces", { text, ...meta });
       else {
-        $("pc-submit").textContent = "正在读图…";
+        $("pc-submit").textContent = "小满在读图…";
         const saved = await upload(S.file, meta);
         if (saved.ocr_status === "failed") showError($("pc-error"), { code: "image_transcribe_failed", message: `图片已存下，但没能转成文字：${saved.ocr_error}。可以在卡片上点「重新读图」。` });
       }
@@ -82,7 +95,7 @@
     } finally {
       S.busy = false;
       $("pc-submit").disabled = false;
-      $("pc-submit").textContent = "收进来";
+      $("pc-submit").textContent = "交给小满";
     }
   }
 
@@ -163,23 +176,66 @@
         onclick: () => openImage({ url: p.image_url, quote: p.title || "收藏的图片", id: `piece-${p.id}` }) }), ocrView(p))
       : el("blockquote", {}, p.text);
     const ask = el("button", { type: "button", class: "lnk", onclick: () => {
+      setPane("talk");
       const input = $("pc-chat-input");
       input.value = `你怎么看 #${p.id} 这段？`;
       input.focus();
-    } }, "问它这段");
+    } }, "问小满这段");
     return el("figure", { class: `pc-card ${p.kind}`, "data-id": p.id, style: `--i:${Math.min(i, 12)}` },
       body, source(p), noteView(p),
       el("div", { class: "pc-card-acts" }, ask),
       el("button", { type: "button", class: "x", "aria-label": "删除这条收藏", onclick: () => remove(p) }, "×"));
   }
-  function renderList() {
-    const list = $("pc-list");
-    $("pc-count").textContent = S.pieces.length ? `共 ${S.pieces.length} 条` : "";
-    if (!S.pieces.length) {
-      list.replaceChildren(el("p", { class: "wall-empty" }, "还没有收藏。读到打动你的文字，粘贴进来，再随手写一句它为什么打动你。之后可以在右边和我聊这些内容。"));
+  function cited() {
+    const m = MIND.state && MIND.state.mind;
+    const ids = new Set();
+    if (m) [...m.views, ...m.tastes, ...m.doubts, ...m.psychology].forEach((it) => it.sources.forEach((i) => ids.add(i)));
+    return ids;
+  }
+  function renderOverview() {
+    const box = $("pc-overview");
+    const all = S.pieces;
+    $("pc-tab-count").textContent = all.length ? `已交给小满 ${all.length} 条` : "把读到的东西交给小满";
+    if (!all.length) {
+      box.replaceChildren(el("h4", {}, "概览"),
+        el("p", { class: "ov-empty" }, "这里会汇总你交给小满的东西：多少段文字、多少张图、来自哪些地方。"));
       return;
     }
-    list.replaceChildren(...S.pieces.map(card));
+    const texts = all.filter((p) => p.kind === "text").length;
+    const noted = all.filter((p) => p.note).length;
+    const used = cited();
+    const inMind = all.filter((p) => used.has(p.id)).length;
+    const plats = {};
+    all.forEach((p) => { const k = p.platform || "未标来源"; plats[k] = (plats[k] || 0) + 1; });
+    const rows = Object.entries(plats).sort((a, b) => b[1] - a[1]);
+    const top = rows[0][1];
+    const stat = (n, label) => el("div", { class: "ov-stat" }, el("b", {}, String(n)), el("span", {}, label));
+    const label = (p) => (p.title || p.text || p.caption || "图片").replace(/\s+/g, " ").slice(0, 20);
+    box.replaceChildren(
+      el("h4", {}, "概览"),
+      el("div", { class: "ov-stats" }, stat(all.length, "条收藏"), stat(texts, "段文字"), stat(all.length - texts, "张图"), stat(noted, "条有批注")),
+      el("p", { class: "ov-mind" }, inMind ? `其中 ${inMind} 条成了小满某个看法的来源` : "小满还没从这些收藏里形成看法"),
+      el("h4", {}, "来自"),
+      el("ul", { class: "ov-plats" }, ...rows.map(([k, n]) => el("li", {},
+        el("button", { type: "button", "aria-pressed": String(S.filter === k), title: `只看${k}`,
+          onclick: () => { S.filter = S.filter === k ? "" : k; renderList(); } },
+          el("span", {}, k), el("i", { style: `--w:${Math.max(8, Math.round((n / top) * 100))}%` }), el("b", {}, String(n)))))),
+      el("h4", {}, "最近交来的"),
+      el("ol", { class: "ov-recent" }, ...all.slice(0, 5).map((p) => el("li", {},
+        el("button", { type: "button", onclick: () => jump(p.id) }, el("em", {}, `#${p.id}`),
+          p.kind === "image" ? el("small", {}, "图") : null, label(p))))));
+  }
+  function renderList() {
+    const list = $("pc-list");
+    renderOverview();
+    const shown = S.filter ? S.pieces.filter((p) => (p.platform || "未标来源") === S.filter) : S.pieces;
+    $("pc-count").textContent = !S.pieces.length ? "" : S.filter ? `${S.filter} · ${shown.length} 条` : `全部 ${S.pieces.length} 条`;
+    $("pc-filter").replaceChildren(...(S.filter ? [el("button", { type: "button", onclick: () => { S.filter = ""; renderList(); } }, "看全部")] : []));
+    if (!S.pieces.length) {
+      list.replaceChildren(el("p", { class: "wall-empty" }, "还没有收藏。读到打动你的文字，粘贴进来，再随手写一句它为什么打动你。小满会读这些东西，慢慢长出自己的看法。"));
+      return;
+    }
+    list.replaceChildren(...shown.map(card));
   }
   async function remove(p) {
     if (!confirm("删除这条收藏？")) return;
@@ -196,11 +252,13 @@
     refreshMind();
   }
 
-  /* ---- 它的想法 ---- */
+  /* ---- 小满的想法 ---- */
   function cite(ids) {
     return ids.map((i) => el("button", { type: "button", class: "pc-cite", title: `看 #${i}`, onclick: () => jump(i) }, `#${i}`));
   }
   function jump(id) {
+    if (S.pane !== "store") setPane("store", false);
+    if (S.filter && !document.querySelector(`.pc-card[data-id="${id}"]`)) { S.filter = ""; renderList(); }
     const node = document.querySelector(`.pc-card[data-id="${id}"]`);
     if (!node) return;
     node.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -208,46 +266,69 @@
     void node.offsetWidth;
     node.classList.add("flash");
   }
+  function reveal(label, path, display) {
+    const line = el("span", { class: "pc-cites" });
+    line.append(el("button", { type: "button", class: "pc-cite", onclick: async () => {
+      try { line.replaceChildren(display(await api("GET", path))); }
+      catch (err) { showError($("pc-chat-error"), err); }
+    } }, label));
+    return line;
+  }
   function mindList(title, items) {
     if (!items.length) return null;
-    return el("div", { class: "pc-mind-sec" }, el("h4", {}, title), el("ul", {}, ...items.map((it) => el("li", {},
-      it.text, " ", el("span", { class: "pc-cites" }, "来自 ", ...cite(it.sources)),
-      it.disagrees_with_note && it.disagrees_with_note.length
-        ? el("span", { class: "pc-disagree" }, "不同意你在 ", ...cite(it.disagrees_with_note), " 的批注") : null))));
+    return el("div", { class: "pc-mind-sec" }, el("h4", {}, title), el("ul", {}, ...items.map((it) => {
+      const chats = [...new Set(it.evidence.filter((e) => e.kind === "chat").map((e) => e.source_id))];
+      const node = el("li", {}, it.text, " ", el("span", { class: "pc-cites" }, "来自 ", ...cite(it.sources),
+        ...chats.map((id) => reveal(`对话 #${id}`, `/api/pieces/chat/${id}`, (m) => `「${m.content}」`))));
+      if (it.reason) node.append(el("div", { class: "muted" }, `变化原因：${it.reason}`));
+      if (it.replaces) node.append(reveal("原先怎么想", `/api/pieces/mind/nodes/${it.replaces}`, (n) => `原先：${n.text}`));
+      if (it.kind === "user") node.append(el("button", { type: "button", class: "pc-cite", onclick: async () => {
+        try { await api("DELETE", `/api/pieces/mind/memories/${it.id}`); refreshMind(); }
+        catch (err) { showError($("pc-chat-error"), err); }
+      } }, "忘记这条"));
+      return node;
+    })));
   }
   function renderMind() {
     const st = MIND.state;
     if (!st) return;
     const status = $("pc-mind-status");
-    if (MIND.busy) status.textContent = `正在读 ${st.pending} 条新变化…`;
+    const m0 = st.mind;
+    const n = m0.views.length + m0.tastes.length + m0.doubts.length + m0.psychology.length;
+    if (st.pending && !st.error) status.textContent = `还有 ${st.pending} 处变化待消化…`;
     else if (st.error) status.textContent = "上次没想完";
-    else status.textContent = st.updated_at ? `读过 ${st.total} 条` : "";
+    else status.textContent = st.total ? `读过 ${st.total} 条 · ${n} 个念头` : "还什么都没读过";
+    $("pc-tab-mood").textContent = st.busy ? "正在读…" : n ? `${n} 个念头` : "和小满聊聊";
+    // The orb grows with what 小满 has read and thought: size from pieces, brightness from mind items.
+    const orb = $("xm-orb");
+    orb.style.setProperty("--g", String(Math.min(1, Math.log2(1 + st.total) / 6)));
+    orb.style.setProperty("--l", String(Math.min(1, n / 16)));
+    document.querySelectorAll(".xm-orb").forEach((o) => o.classList.toggle("thinking", st.busy));
     const body = $("pc-mind-body");
     const m = st.mind;
-    const any = m.views.length || m.tastes.length || m.doubts.length;
-    const parts = any ? [mindList("我相信", m.views), mindList("我偏爱", m.tastes), mindList("我拿不准", m.doubts)]
-      : [el("p", { class: "muted pc-mind-empty" }, st.total ? "它还在读，暂时没形成看法。" : "它还什么都没读过。先在左边传一点东西给它。")];
-    if (st.error && !MIND.busy) {
+    const parts = n || m.user.length ? [mindList("我相信", m.views), mindList("我偏爱", m.tastes),
+      mindList("我拿不准", m.doubts), mindList("我的思考倾向", m.psychology), mindList("你让我记住的", m.user)]
+      : [el("p", { class: "muted pc-mind-empty" }, st.total ? "小满还在读，暂时没形成看法。" : "小满还什么都没读过。先去「收藏」交一点东西给小满。")];
+    if (st.error && !st.busy) {
       parts.push(el("p", { class: "pc-mind-err" }, `更新失败：${st.error} `,
         el("button", { type: "button", class: "lnk", onclick: () => refreshMind(true) }, "再试一次")));
     }
     body.replaceChildren(...parts.filter(Boolean));
   }
   async function refreshMind(force = false) {
-    if (MIND.busy) { MIND.again = true; return; }
+    if (MIND.busy) { MIND.again = force || MIND.again || "read"; return; }
+    clearTimeout(MIND.timer);
+    MIND.busy = true;
     try {
-      MIND.state = await api("GET", "/api/pieces/mind");
-      renderMind();
-      if (!MIND.state.pending || (MIND.state.error && !force)) return;
-      MIND.busy = true;
-      renderMind();
-      MIND.state = await api("POST", "/api/pieces/mind/refresh");
+      MIND.state = force ? await api("POST", "/api/pieces/mind/refresh") : await api("GET", "/api/pieces/mind");
     } catch (err) {
       MIND.state = await api("GET", "/api/pieces/mind").catch(() => MIND.state);
     } finally {
       MIND.busy = false;
       renderMind();
-      if (MIND.again) { MIND.again = false; refreshMind(); }
+      renderOverview();
+      if (MIND.again) { const retry = MIND.again === true; MIND.again = false; refreshMind(retry); }
+      else if (MIND.state?.retryable) MIND.timer = setTimeout(() => refreshMind(), MIND.state.error ? 5000 : 1500);
     }
   }
 
@@ -281,6 +362,14 @@
       if (m.id) node.append(el("div", { class: "pc-mact" }, saveButton(m)));
     }
     if (m.content) { const span = el("span", {}); renderText(span, m.content); node.append(span); }
+    if (m.id && m.role === "user" && m.content) {
+      node.append(el("div", { class: "pc-mact" }, el("button", { type: "button", class: "lnk", onclick: async () => {
+        const topic = window.prompt("确认把这句话原样保存为用户记忆。它适用于哪个主题？（例如：电影）", "");
+        if (!topic?.trim()) return;
+        try { await api("POST", `/api/pieces/chat/${m.id}/remember`, { topic: topic.trim() }); refreshMind(); }
+        catch (err) { showError($("pc-chat-error"), err); }
+      } }, "记住这句话")));
+    }
     box.append(node);
     box.scrollTop = box.scrollHeight;
     return node;
@@ -319,46 +408,65 @@
     const input = $("pc-chat-input");
     const text = input.value.trim();
     const pic = S.attach;
-    if ((!text && !pic) || S.sending || S.attaching) return;
+    const useForGrowth = $("pc-use-for-growth").checked;
+    if ((!text && !pic) || S.sending || S.attaching || S.clearing) return;
     S.sending = true;
     $("pc-send").disabled = true;
+    $("pc-clear").disabled = true;
     clearError($("pc-chat-error"));
     const mine = addMsg({ role: "user", content: text, image_url: pic ? pic.image_url : "" });
     input.value = "";
+    $("pc-use-for-growth").checked = false;
     S.attach = null;
     renderAttach();
-    const pending = el("div", { class: "m a pending" }, "正在翻你的收藏…");
+    const pending = $("pc-thinking").content.firstElementChild.cloneNode(true);
     $("pc-msgs").append(pending);
     $("pc-msgs").scrollTop = $("pc-msgs").scrollHeight;
     try {
-      const res = await api("POST", "/api/pieces/chat", { message: text, image: pic ? pic.image : "" });
+      const res = await api("POST", "/api/pieces/chat", { message: text, image: pic ? pic.image : "", use_for_growth: useForGrowth });
       pending.remove();
       mine.replaceWith(addMsg(res.user_message));
       addMsg(res.message);
+      if (useForGrowth) refreshMind();
     } catch (err) {
       pending.remove();
       mine.remove();
       showError($("pc-chat-error"), err);
       input.value = text;
+      $("pc-use-for-growth").checked = useForGrowth;
       S.attach = pic;
       renderAttach();
     } finally {
       S.sending = false;
       $("pc-send").disabled = false;
+      $("pc-clear").disabled = false;
       input.focus();
     }
   }
   async function onClear() {
-    if (!confirm("清空和它的对话？收藏和它的想法都不受影响。")) return;
+    if (S.sending || S.clearing || !confirm("清空和小满的对话？收藏会保留，但依赖这些对话的看法和记忆会失效。")) return;
+    S.clearing = true;
+    $("pc-clear").disabled = true;
+    $("pc-send").disabled = true;
     try {
       await api("DELETE", "/api/pieces/chat");
+      ++S.chatTok;
       $("pc-msgs").replaceChildren();
+      refreshMind();
     } catch (err) { showError($("pc-chat-error"), err); }
+    finally {
+      S.clearing = false;
+      $("pc-clear").disabled = false;
+      $("pc-send").disabled = false;
+    }
   }
 
   window.renderPieces = () => {
     if (!S.loaded) {
       S.loaded = true;
+      let saved = "store";
+      try { saved = localStorage.getItem("pc-pane") || "store"; } catch { /* storage off */ }
+      setPane(saved === "talk" ? "talk" : "store", false);
       loadChat().catch((err) => showError($("pc-chat-error"), err));
     }
     loadPieces().catch((err) => showError($("pc-error"), err));
@@ -366,6 +474,7 @@
 
   document.querySelectorAll("[data-pcmode]").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.pcmode)));
   $("pc-form").addEventListener("submit", onSubmit);
+  document.querySelectorAll(".pc-switch [data-pane]").forEach((b) => b.addEventListener("click", () => setPane(b.dataset.pane)));
   $("pc-pick").addEventListener("click", () => $("pc-image").click());
   $("pc-image").addEventListener("change", () => setFile($("pc-image").files[0]));
   const drop = $("pc-form");

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
+from contextlib import asynccontextmanager, suppress
 from datetime import date
 from typing import Any, Literal
 
@@ -139,6 +141,11 @@ class PieceMeta(BaseModel):
 class PieceChatIn(BaseModel):
     message: str = Field(default="", max_length=4000)
     image: str = ""
+    use_for_growth: bool = Field(default=False, strict=True)
+
+
+class MindRemember(BaseModel):
+    topic: str = Field(min_length=1, max_length=40)
 
 
 def error_response(code: str, message: str, status: int) -> JSONResponse:
@@ -164,7 +171,17 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
     piece_chat = PieceChat(db, llm, settings.pieces_dir, settings.max_agent_steps, mind)
     wikiquote = wikiquote or Wikiquote()
 
-    app = FastAPI(title="Movie Diary")
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        worker = asyncio.create_task(mind.run())
+        try:
+            yield
+        finally:
+            worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await worker
+
+    app = FastAPI(title="Movie Diary", lifespan=lifespan)
     settings.posters_dir.mkdir(parents=True, exist_ok=True)
     settings.clips_dir.mkdir(parents=True, exist_ok=True)
     settings.pieces_dir.mkdir(parents=True, exist_ok=True)
@@ -511,8 +528,7 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
                                f"Image is larger than {MAX_IMAGE_BYTES // 1024 // 1024} MB", 413)
         return bytes(buf)
 
-    # The agent's own mind. The page calls /refresh after pieces change; it is not run inside the save request,
-    # so saving stays fast and a failed refresh never loses a piece.
+    # Reads never wait for background growth. The refresh endpoint allows an explicit retry.
     @app.get("/api/pieces/mind")
     def get_mind() -> dict[str, Any]:
         return mind.state()
@@ -520,6 +536,18 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
     @app.post("/api/pieces/mind/refresh")
     async def refresh_mind() -> dict[str, Any]:
         return await mind.refresh()
+
+    @app.get("/api/pieces/mind/nodes/{node_id}")
+    def mind_node(node_id: int) -> dict[str, Any]:
+        nodes = db.growth.nodes(node_id)
+        if not nodes:
+            raise AppError("mind_node_not_found", "这条判断已不可用。", 404)
+        return nodes[0]
+
+    @app.delete("/api/pieces/mind/memories/{node_id}", status_code=204)
+    def forget_mind_memory(node_id: int) -> None:
+        if not db.growth.forget(node_id):
+            raise AppError("mind_memory_not_found", "这条记忆已不可用。", 404)
 
     # Chat routes come before /api/pieces/{piece_id} so "chat" is not read as an id.
     @app.get("/api/pieces/chat")
@@ -536,7 +564,7 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
     async def piece_send(body: PieceChatIn) -> dict[str, Any]:
         if body.image and not (CHAT_IMAGE.fullmatch(body.image) and (settings.pieces_dir / body.image).is_file()):
             raise AppError("chat_image_not_found", f"No uploaded chat image {body.image!r}; upload it first", 404)
-        return await piece_chat.reply(body.message, body.image)
+        return await piece_chat.reply(body.message, body.image, use_for_growth=body.use_for_growth)
 
     @app.delete("/api/pieces/chat", status_code=204)
     def piece_clear() -> None:
@@ -545,6 +573,20 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None,
         for name in images:
             if name and CHAT_IMAGE.fullmatch(name):
                 (settings.pieces_dir / name).unlink(missing_ok=True)
+
+    @app.get("/api/pieces/chat/{message_id}")
+    def piece_message(message_id: int) -> dict[str, Any]:
+        message = db.get_piece_message(message_id)
+        if not message:
+            raise AppError("piece_message_not_found", "这条对话已不可用。", 404)
+        return public_message(message)
+
+    @app.post("/api/pieces/chat/{message_id}/remember", status_code=201)
+    def remember_mind_memory(message_id: int, body: MindRemember) -> dict[str, int]:
+        topic = body.topic.strip().casefold()
+        if not topic:
+            raise AppError("mind_topic_empty", "请填写记忆适用的主题。", 422)
+        return {"id": db.growth.remember(message_id, topic)}
 
     @app.post("/api/pieces/chat/{message_id}/save", status_code=201)
     async def piece_save_chat_image(message_id: int, body: PieceMeta) -> dict[str, Any]:
